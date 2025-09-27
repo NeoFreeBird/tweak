@@ -25,6 +25,14 @@
 #import <Preferences/PSListController.h>
 #import <Preferences/PSSpecifier.h>
 #import "ModernSettingsViewController.h"
+#import "T1PlayerMediaEntitySessionProducible.h"
+#import "TFSTwitterEntityMediaVideoVariant.h"
+#import "JGProgressHUD.h"
+#import "TFNActiveTextItem.h"
+#import "TFNAttributedTextModel.h"
+#import "TFNMenuSheetViewController.h"
+#import "BHDownload.h"
+#import "MediaInformation.h"
 
 @class T1SettingsViewController;
 
