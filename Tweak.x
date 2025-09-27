@@ -4132,3 +4132,26 @@ static NSBundle *BHBundle() {
         }
     }
 %end
+
+%hook TFNItemsDataViewControllerBackingStore
+- (NSArray *)sections {
+    NSArray *originalSections = %orig;
+    NSMutableArray *filteredSections = [NSMutableArray array];
+
+    for (id section in originalSections) {
+        // Vérifie que la section contient l’élément "Video"
+        BOOL containsVideo = NO;
+        for (id item in section) {
+            NSString *title = [item valueForKey:@"title"];
+            if ([title isKindOfClass:[NSString class]] && [title isEqualToString:@"Video"]) {
+                containsVideo = YES;
+                break;
+            }
+        }
+        if (!containsVideo) {
+            [filteredSections addObject:section];
+        }
+    }
+    return [filteredSections copy];
+}
+%end
