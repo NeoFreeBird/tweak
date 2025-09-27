@@ -1672,8 +1672,18 @@ static void batchSwizzlingOnClass(Class cls, NSArray<NSString*>*origSelectors, I
 %end
 
 @interface TFNScrollingSegmentedViewController : UIViewController
-- (void)setSelectedIndex:(NSInteger)index;
-- (NSInteger)selectedIndex;
+- (void)viewDidLoad {
+    %orig;
+
+    // Si tu veux seulement désactiver le swipe sur la Home Timeline
+    if (isHomeTimelineContainer(self)) {
+        for (UIGestureRecognizer *gesture in self.view.gestureRecognizers) {
+            if ([gesture isKindOfClass:[UIPanGestureRecognizer class]]) {
+                gesture.enabled = NO;
+            }
+        }
+    }
+}
 @end
 
 @interface THFTimelineViewController : UIViewController
