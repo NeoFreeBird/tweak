@@ -1723,49 +1723,13 @@ static void refreshViewIfNeeded(UIView *view, NSTimeInterval delay) {
 }
 
 // Ensure proper view loading and prevent white screen, only on homepage
-%hook TFNScrollingSegmentedViewController
-
 - (void)viewDidLoad {
     %orig;
 
     if (isHomeTimelineContainer(self)) {
-        // Forcer Following
         [self setSelectedIndex:1];
-
-        // Désactiver le swipe horizontal
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            BH_EnumerateSubviewsRecursively(self.view, ^(UIView *subview) {
-                if ([subview isKindOfClass:[UIScrollView class]]) {
-                    UIScrollView *sv = (UIScrollView *)subview;
-                    if (sv.isPagingEnabled) {
-                        sv.pagingEnabled = NO;
-                    }
-                    sv.alwaysBounceHorizontal = NO;
-                    sv.showsHorizontalScrollIndicator = NO;
-                    if (sv.contentSize.width > CGRectGetWidth(sv.frame) + 1.0) {
-                        sv.contentSize = CGSizeMake(CGRectGetWidth(sv.frame), sv.contentSize.height);
-                    }
-                }
-
-                for (UIGestureRecognizer *g in subview.gestureRecognizers ?: @[]) {
-                    if ([g isKindOfClass:[UIPanGestureRecognizer class]]) {
-                        NSString *desc = NSStringFromClass([g.view class]);
-                        NSString *gdesc = [g description] ?: @"";
-                        if ([desc containsString:@"Page"] ||
-                            [gdesc.lowercaseString containsString:@"page"] ||
-                            [gdesc.lowercaseString containsString:@"paging"]) {
-                            g.enabled = NO;
-                        }
-                    }
-                }
-            });
-
-            refreshViewIfNeeded(self.view, 0.05);
-        });
     }
 }
-
-%end
 
 // Additional fix for view appearance to ensure content loads properly, only on homepage
 - (void)viewDidAppear:(BOOL)animated {
