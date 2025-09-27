@@ -32,6 +32,7 @@
 #import "TFNMenuSheetViewController.h"
 #import "BHDownload.h"
 #import "MediaInformation.h"
+#import "THFTimelineViewController.h"
 
 @class T1SettingsViewController;
 
