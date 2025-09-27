@@ -1671,6 +1671,20 @@ static void batchSwizzlingOnClass(Class cls, NSArray<NSString*>*origSelectors, I
 }
 %end
 
+@interface TFNScrollingSegmentedViewController : UIViewController
+- (void)setSelectedIndex:(NSInteger)index;
+- (NSInteger)selectedIndex;
+@end
+
+@interface THFTimelineViewController : UIViewController
+- (void)_pullToRefresh:(id)sender;
+@end
+
+// Helper functions to reduce code duplication
+static BOOL isHomeTimelineContainer(UIViewController *viewController) {
+    return [viewController.parentViewController isKindOfClass:NSClassFromString(@"THFHomeTimelineContainerViewController")];
+}
+
 static void refreshViewIfNeeded(UIView *view, NSTimeInterval delay) {
     if (!view) return;
 
