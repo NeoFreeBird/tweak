@@ -33,6 +33,7 @@
 #import "BHDownload.h"
 #import "MediaInformation.h"
 #import "THFTimelineViewController.h"
+#import "TFSTwitterEntityMediaVideoVariant.h"
 
 @class T1SettingsViewController;
 
