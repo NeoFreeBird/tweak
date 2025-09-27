@@ -4133,25 +4133,27 @@ static NSBundle *BHBundle() {
     }
 %end
 
-%hook TFNItemsDataViewControllerBackingStore
-- (NSArray *)sections {
-    NSArray *originalSections = %orig;
-    NSMutableArray *filteredSections = [NSMutableArray array];
+%hook T1GenericSettingsViewController // ou la classe de ton menu de gauche
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
 
-    for (id section in originalSections) {
-        // Vérifie que la section contient l’élément "Video"
-        BOOL containsVideo = NO;
-        for (id item in section) {
-            NSString *title = [item valueForKey:@"title"];
-            if ([title isKindOfClass:[NSString class]] && [title isEqualToString:@"Video"]) {
-                containsVideo = YES;
-                break;
-            }
+    UITableViewCell *cell = %orig(indexPath);
+
+    @try {
+        NSString *title = nil;
+        if ([cell respondsToSelector:@selector(textLabel)]) {
+            title = cell.textLabel.text;
         }
-        if (!containsVideo) {
-            [filteredSections addObject:section];
+
+        if (title && ([title isEqualToString:@"Video"] || [title isEqualToString:@"Vidéos"])) {
+            cell.hidden = YES;            // cache la cellule
+            cell.frame = CGRectZero;       // évite l’espace vide
+            cell.contentView.alpha = 0.0;  // optionnel, pour être sûr
         }
+
+    } @catch (NSException *e) {
+        NSLog(@"[BHTwitter] Error hiding Video tab: %@", e);
     }
-    return [filteredSections copy];
+
+    return cell;
 }
 %end
