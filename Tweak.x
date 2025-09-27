@@ -4132,28 +4132,3 @@ static NSBundle *BHBundle() {
         }
     }
 %end
-
-%hook T1GenericSettingsViewController // ou la classe de ton menu de gauche
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-
-    UITableViewCell *cell = %orig(indexPath);
-
-    @try {
-        NSString *title = nil;
-        if ([cell respondsToSelector:@selector(textLabel)]) {
-            title = cell.textLabel.text;
-        }
-
-        if (title && ([title isEqualToString:@"Video"] || [title isEqualToString:@"Vidéos"])) {
-            cell.hidden = YES;            // cache la cellule
-            cell.frame = CGRectZero;       // évite l’espace vide
-            cell.contentView.alpha = 0.0;  // optionnel, pour être sûr
-        }
-
-    } @catch (NSException *e) {
-        NSLog(@"[BHTwitter] Error hiding Video tab: %@", e);
-    }
-
-    return cell;
-}
-%end
