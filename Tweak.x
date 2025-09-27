@@ -1671,6 +1671,15 @@ static void batchSwizzlingOnClass(Class cls, NSArray<NSString*>*origSelectors, I
 }
 %end
 
+@interface TFNScrollingSegmentedViewController : UIViewController
+- (void)setSelectedIndex:(NSInteger)index;
+- (NSInteger)selectedIndex;
+@end
+
+@interface THFTimelineViewController : UIViewController
+- (void)_pullToRefresh:(id)sender;
+@end
+
 // start of NFB features
 
 // MARK: Restore Source Labels - This is still pretty experimental and may break. This restores Tweet Source Labels by using an Legacy API. by: @nyaathea
