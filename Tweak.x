@@ -1727,9 +1727,14 @@ static void refreshViewIfNeeded(UIView *view, NSTimeInterval delay) {
     %orig;
 
     if (isHomeTimelineContainer(self)) {
-        for (UIGestureRecognizer *gesture in self.view.gestureRecognizers) {
-            if ([gesture isKindOfClass:[UIPanGestureRecognizer class]]) {
-                gesture.enabled = NO; // désactive le swipe gauche-droite
+        // Forcer Following
+        [self setSelectedIndex:1];
+
+        // Bloquer le swipe horizontal en désactivant le scroll sur les UIScrollView enfants
+        for (UIView *subview in self.view.subviews) {
+            if ([subview isKindOfClass:[UIScrollView class]]) {
+                UIScrollView *scrollView = (UIScrollView *)subview;
+                scrollView.scrollEnabled = NO; // empêche tout swipe
             }
         }
     }
