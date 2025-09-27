@@ -1723,6 +1723,8 @@ static void refreshViewIfNeeded(UIView *view, NSTimeInterval delay) {
 }
 
 // Ensure proper view loading and prevent white screen, only on homepage
+%hook TFNScrollingSegmentedViewController
+
 - (void)viewDidLoad {
     %orig;
 
@@ -1730,62 +1732,58 @@ static void refreshViewIfNeeded(UIView *view, NSTimeInterval delay) {
         // Forcer Following
         [self setSelectedIndex:1];
 
-        // Bloquer le swipe horizontal en désactivant le scroll sur les UIScrollView enfants
-        for (UIView *subview in self.view.subviews) {
-            if ([subview isKindOfClass:[UIScrollView class]]) {
-                UIScrollView *scrollView = (UIScrollView *)subview;
-                scrollView.scrollEnabled = NO; // empêche tout swipe
-            }
-        }
+        // Désactiver le swipe horizontal
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            BH_EnumerateSubviewsRecursively(self.view, ^(UIView *subview) {
+                if ([subview isKindOfClass:[UIScrollView class]]) {
+                    UIScrollView *sv = (UIScrollView *)subview;
+                    if (sv.isPagingEnabled) {
+                        sv.pagingEnabled = NO;
+                    }
+                    sv.alwaysBounceHorizontal = NO;
+                    sv.showsHorizontalScrollIndicator = NO;
+                    if (sv.contentSize.width > CGRectGetWidth(sv.frame) + 1.0) {
+                        sv.contentSize = CGSizeMake(CGRectGetWidth(sv.frame), sv.contentSize.height);
+                    }
+                }
+
+                for (UIGestureRecognizer *g in subview.gestureRecognizers ?: @[]) {
+                    if ([g isKindOfClass:[UIPanGestureRecognizer class]]) {
+                        NSString *desc = NSStringFromClass([g.view class]);
+                        NSString *gdesc = [g description] ?: @"";
+                        if ([desc containsString:@"Page"] ||
+                            [gdesc.lowercaseString containsString:@"page"] ||
+                            [gdesc.lowercaseString containsString:@"paging"]) {
+                            g.enabled = NO;
+                        }
+                    }
+                }
+            });
+
+            refreshViewIfNeeded(self.view, 0.05);
+        });
     }
 }
 
-- (void)viewDidLoad {
+%end
+
+// Additional fix for view appearance to ensure content loads properly, only on homepage
+- (void)viewDidAppear:(BOOL)animated {
     %orig;
 
-    if (!isHomeTimelineContainer(self)) return;
+    if (isHomeTimelineContainer(self)) {
+        [self setSelectedIndex:1];
+        refreshViewIfNeeded(self.view, 0.1);
+    }
+}
 
-    // Forcer Following
-    [self setSelectedIndex:1];
-
-    // Petit délai pour que la hiérarchie de vues soit en place
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        // Parcours récursif de toutes les sous-vues
-        BH_EnumerateSubviewsRecursively(self.view, ^(UIView *subview) {
-            if ([subview isKindOfClass:[UIScrollView class]]) {
-                UIScrollView *sv = (UIScrollView *)subview;
-
-                // Si c'est une scrollView paginée (le swipe ForYou/Following), on la neutralise
-                if (sv.isPagingEnabled) {
-                    sv.pagingEnabled = NO;
-                }
-
-                sv.alwaysBounceHorizontal = NO;
-                sv.showsHorizontalScrollIndicator = NO;
-
-                // Réduction du contentSize si trop large (empêche le swipe horizontal)
-                if (sv.contentSize.width > CGRectGetWidth(sv.frame) + 1.0) {
-                    sv.contentSize = CGSizeMake(CGRectGetWidth(sv.frame), sv.contentSize.height);
-                }
-            }
-
-            // Désactiver les gestures "page" ou "paging"
-            for (UIGestureRecognizer *g in subview.gestureRecognizers ?: @[]) {
-                if ([g isKindOfClass:[UIPanGestureRecognizer class]]) {
-                    NSString *desc = NSStringFromClass([g.view class]);
-                    NSString *gdesc = [g description] ?: @"";
-
-                    if ([desc containsString:@"Page"] ||
-                        [gdesc.lowercaseString containsString:@"page"] ||
-                        [gdesc.lowercaseString containsString:@"paging"]) {
-                        g.enabled = NO;
-                    }
-                }
-            }
-        });
-
-        refreshViewIfNeeded(self.view, 0.05);
-    });
+// Ensure selected index is always the Following tab, only on homepage
+- (void)setSelectedIndex:(NSInteger)index {
+    if (isHomeTimelineContainer(self)) {
+        %orig(1); // Always set to Following tab (index 1)
+    } else {
+        %orig(index); // Use the original index for other interfaces
+    }
 }
 %end
 
