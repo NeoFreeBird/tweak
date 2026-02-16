@@ -13,6 +13,13 @@ BHTwitter_OBJ_FILES = $(shell find lib -name '*.a')
 BHTwitter_LIBRARIES = sqlite3 bz2 c++ iconv z
 BHTwitter_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-nullability-completeness -Wno-unused-function -Wno-unused-property-ivar -Wno-error
 
+# 파일 추가
+   BHTwitter_FILES += WebLoginViewController.m
+   BHTwitter_FILES += WebLoginHook.xm
+   
+   # WebKit 프레임워크 추가 (기존 FRAMEWORKS 라인 수정)
+   BHTwitter_FRAMEWORKS = UIKit CoreGraphics QuartzCore AssetsLibrary Photos AVFoundation MediaPlayer AudioToolbox MessageUI Social WebKit
+
 include $(THEOS_MAKE_PATH)/tweak.mk
 
 ifdef SIDELOADED
