@@ -2551,6 +2551,7 @@ if ([type isEqualToString:@"compactButton"]) {
 
     NSMutableArray<UIAction *> *actions = [NSMutableArray array];
 
+    // Normal host
     for (NSString *host in hosts) {
         UIAction *action = [UIAction actionWithTitle:host
                                                image:nil
@@ -2571,6 +2572,56 @@ if ([type isEqualToString:@"compactButton"]) {
 
         [actions addObject:action];
     }
+
+    // Custom host
+    UIAction *customAction = [UIAction actionWithTitle:@"Custom"
+                                            image:nil
+                                            identifier:nil
+                                            handler:^(__kindof UIAction * _Nonnull a) {
+        
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Custom host"
+                                                                       message:@"Enter an URL"
+                                                                preferredStyle:UIAlertControllerStyleAlert];
+        
+
+        [alert addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
+            textField.keyboardType = UIKeyboardTypeURL;
+            textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+            textField.clearButtonMode = UITextFieldViewModeWhileEditing;
+        }];
+        UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:@"Cancel"
+                                                               style:UIAlertActionStyleCancel
+                                                             handler:nil];
+
+        UIAlertAction *saveAction = [UIAlertAction actionWithTitle:@"Save"
+                                                             style:UIAlertActionStyleDefault
+                                                           handler:^(UIAlertAction * _Nonnull action) {
+            UITextField *textField = alert.textFields.firstObject;
+            NSString *customHost = [textField.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+            
+            if (customHost.length > 0) {
+                [defaults setObject:customHost forKey:@"tweet_url_host"];
+                [defaults synchronize];
+                
+                if (indexPath) {
+                    [self.tableView reloadRowsAtIndexPaths:@[indexPath]
+                                          withRowAnimation:UITableViewRowAnimationNone];
+                }
+            }
+        }];
+        
+        [alert addAction:cancelAction];
+        [alert addAction:saveAction];
+        
+        [self presentViewController:alert animated:YES completion:nil];
+    }];
+
+    if (currentHost.length > 0 && ![hosts containsObject:currentHost]) {
+        customAction.state = UIMenuElementStateOn;
+    }
+
+    [actions addObject:customAction];
+
 
     UIMenu *menu = [UIMenu menuWithTitle:@"URL"
                                    image:nil
