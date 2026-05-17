@@ -6,7 +6,6 @@
 //
 
 #import "BHTManager.h"
-#import "SettingsViewController.h"
 #import "BHTBundle/BHTBundle.h"
 #import "ModernSettingsViewController.h"
 
