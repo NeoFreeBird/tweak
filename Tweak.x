@@ -472,6 +472,7 @@ static void batchSwizzlingOnClass(Class cls, NSArray<NSString*>*origSelectors, I
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"voice"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"undo_tweet"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"TrustedFriends"];
+        [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"bypass_age_verification"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"disableSensitiveTweetWarnings"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"disable_immersive_player"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"custom_voice_upload"];
@@ -1628,6 +1629,12 @@ static void BHTApplyCopyButtonStyle(UIButton *copyButton, T1ProfileHeaderView *h
         return true;
     }
 
+    if ([key hasPrefix:@"ios_age_assurance"] || [key isEqualToString:@"grok_settings_age_restriction_enabled"]) {
+        if ([BHTManager bypassAgeVerification]) {
+            return false;
+        }
+    }
+
     if ([key isEqualToString:@"subscriptions_upsells_get_verified_profile"] || [key isEqualToString:@"ios_profile_analytics_upsell_possible_enabled"] || [key isEqualToString:@"ios_profile_analytics_upsell_enabled"]) {
         return false;
     }
@@ -1707,7 +1714,7 @@ static void BHTApplyCopyButtonStyle(UIButton *copyButton, T1ProfileHeaderView *h
         }
         return YES;                       // default off when unset
     }
-    
+
     return %orig;
 }
 %end

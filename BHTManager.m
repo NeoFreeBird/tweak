@@ -188,6 +188,9 @@
 + (BOOL)OldStyle {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"old_style"];
 }
++ (BOOL)bypassAgeVerification {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"bypass_age_verification"];
+}
 + (BOOL)changeFont {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"en_font"];
 }
@@ -384,4 +387,3 @@
 }
 
 @end
-

@@ -34,6 +34,7 @@
 + (BOOL)DisableVODCaptions;
 + (BOOL)Padlock;
 + (BOOL)OldStyle;
++ (BOOL)bypassAgeVerification;
 + (BOOL)changeFont;
 + (BOOL)FLEX;
 + (BOOL)autoHighestLoad;
@@ -89,4 +90,3 @@
 + (BOOL)disableXChat;
 
 @end
-

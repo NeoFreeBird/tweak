@@ -428,6 +428,8 @@ PSSpecifier *photosVideosSection = [self newSectionWithTitle:[[BHTBundle sharedB
 
         PSSpecifier *disableSensitiveTweetWarnings = [self newSwitchCellWithTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"DISABLE_SENSITIVE_TWEET_WARNINGS_OPTION_TITLE"] detailTitle:nil key:@"disableSensitiveTweetWarnings" defaultValue:true changeAction:nil];
 
+        PSSpecifier *bypassAgeVerification = [self newSwitchCellWithTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"BYPASS_AGE_VERIFICATION_OPTION_TITLE"] detailTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"BYPASS_AGE_VERIFICATION_OPTION_DETAIL_TITLE"] key:@"bypass_age_verification" defaultValue:true changeAction:nil];
+
         PSSpecifier *copyProfileInfo = [self newSwitchCellWithTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"COPY_PROFILE_INFO_OPTION_TITLE"] detailTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"COPY_PROFILE_INFO_OPTION_DETAIL_TITLE"] key:@"CopyProfileInfo" defaultValue:false changeAction:nil];
 
         PSSpecifier *tweetToImage = [self newSwitchCellWithTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"TWEET_TO_IMAGE_OPTION_TITLE"] detailTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"TWEET_TO_IMAGE_OPTION_DETAIL_TITLE"] key:@"TweetToImage" defaultValue:false changeAction:nil];
@@ -602,6 +604,7 @@ PSSpecifier *photosVideosSection = [self newSectionWithTitle:[[BHTBundle sharedB
             hideViewCount,
             hideBookmarkButton,
             disableSensitiveTweetWarnings,
+            bypassAgeVerification,
             hideGrokAnalyze,
             squareAvatars,
             replySorting,
