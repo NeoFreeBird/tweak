@@ -10,7 +10,6 @@
 "RESTART_REQUIRED_ALERT_TITLE" = "Требуется перезапуск";
 "RESTART_REQUIRED_ALERT_MESSAGE" = "Необходимо перезапустить Twitter, чтобы изменения вступили в силу.";
 "RESTART_NOW_BUTTON_TITLE" = "Перезапустить";
-"MODERN_LAYOUT_RESTART_MESSAGE" = "Чтобы переключаться между современным и классическим макетом, перезапустите Twitter.";
 
 "CONFIRM_ALERT_MESSAGE" = "Ты точно этого хотел?";
 "YES_BUTTON_TITLE" = "Да";
@@ -73,6 +72,8 @@
 
 "HIDE_MARKBOOK_BUTTON_OPTION_TITLE" = "Скрыть закладки";
 "HIDE_MARKBOOK_BUTTON_OPTION_DETAIL_TITLE" = "Убрать кнопку закладки с твитов.";
+"HIDE_DOWNVOTE_BUTTON_OPTION_TITLE" = "Скрыть дизлайки";
+"HIDE_DOWNVOTE_BUTTON_OPTION_DETAIL_TITLE" = "Убрать кнопку дизлайка с твитов.";
 
 "DISABLE_SENSITIVE_TWEET_WARNINGS_OPTION_TITLE" = "Без предупреждений о чувствительном контенте";
 

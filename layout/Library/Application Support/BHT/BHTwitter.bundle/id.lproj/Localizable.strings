@@ -10,7 +10,6 @@
 "RESTART_REQUIRED_ALERT_TITLE" = "Perlu Mulai Ulang";
 "RESTART_REQUIRED_ALERT_MESSAGE" = "Anda perlu memulai ulang Twitter agar perubahan ini berlaku.";
 "RESTART_NOW_BUTTON_TITLE" = "Mulai Ulang Sekarang";
-"MODERN_LAYOUT_RESTART_MESSAGE" = "Untuk beralih antara tata letak modern dan klasik, Anda perlu memulai ulang Twitter.";
 
 "CONFIRM_ALERT_MESSAGE" = "Yakin mau melakukan itu?";
 "YES_BUTTON_TITLE" = "Ya";
@@ -73,6 +72,8 @@
 
 "HIDE_MARKBOOK_BUTTON_OPTION_TITLE" = "Sembunyikan bookmark";
 "HIDE_MARKBOOK_BUTTON_OPTION_DETAIL_TITLE" = "Hapus tombol bookmark dari Tweet.";
+"HIDE_DOWNVOTE_BUTTON_OPTION_TITLE" = "Sembunyikan downvote";
+"HIDE_DOWNVOTE_BUTTON_OPTION_DETAIL_TITLE" = "Hapus tombol downvote dari Tweet.";
 
 "DISABLE_SENSITIVE_TWEET_WARNINGS_OPTION_TITLE" = "Tanpa peringatan konten sensitif";
 

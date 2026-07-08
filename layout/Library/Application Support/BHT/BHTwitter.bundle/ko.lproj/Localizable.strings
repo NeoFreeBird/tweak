@@ -9,7 +9,6 @@
 /*Alerts and popups*/
 "RESTART_REQUIRED_ALERT_TITLE" = "재시작 필요";
 "RESTART_REQUIRED_ALERT_MESSAGE" = "변경 사항을 적용하기 위해서는 트위터를 재시작해야 합니다.";
-"MODERN_LAYOUT_RESTART_MESSAGE" = "최신/클래식 레이아웃을 전환하기 위해서는 트위터를 재시작해야 합니다.";
 
 "RESET_COMPLETE_TITLE" = "재설정 완료";
 "BACKGROUND_RESET_MESSAGE" = "쪽지 배경화면이 기본값으로 재설정되었습니다.";
@@ -126,6 +125,8 @@
 
 "HIDE_MARKBOOK_BUTTON_OPTION_TITLE" = "북마크 추가 버튼 제거";
 "HIDE_MARKBOOK_BUTTON_OPTION_DETAIL_TITLE" = "트윗에서 북마크 추가 버튼을 제거합니다.";
+"HIDE_DOWNVOTE_BUTTON_OPTION_TITLE" = "다운보트 버튼 제거";
+"HIDE_DOWNVOTE_BUTTON_OPTION_DETAIL_TITLE" = "트윗에서 다운보트 버튼을 제거합니다.";
 
 "DISABLE_SENSITIVE_TWEET_WARNINGS_OPTION_TITLE" = "민감한 콘텐츠 경고 비활성화";
 

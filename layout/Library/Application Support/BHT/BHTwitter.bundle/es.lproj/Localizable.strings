@@ -10,7 +10,6 @@
 "RESTART_REQUIRED_ALERT_TITLE" = "Se requiere reinicio";
 "RESTART_REQUIRED_ALERT_MESSAGE" = "Debes reiniciar Twitter para que este cambio surta efecto.";
 "RESTART_NOW_BUTTON_TITLE" = "Reiniciar ahora";
-"MODERN_LAYOUT_RESTART_MESSAGE" = "Para cambiar entre el diseño moderno y clásico, debes reiniciar Twitter.";
 
 "CONFIRM_ALERT_MESSAGE" = "¿Estás seguro de que querías hacer eso?";
 "YES_BUTTON_TITLE" = "Sí";
@@ -73,6 +72,8 @@
 
 "HIDE_MARKBOOK_BUTTON_OPTION_TITLE" = "Ocultar marcadores";
 "HIDE_MARKBOOK_BUTTON_OPTION_DETAIL_TITLE" = "Quita el botón de marcadores de los Tweets.";
+"HIDE_DOWNVOTE_BUTTON_OPTION_TITLE" = "Ocultar votos negativos";
+"HIDE_DOWNVOTE_BUTTON_OPTION_DETAIL_TITLE" = "Quita el botón de voto negativo de los Tweets.";
 
 "DISABLE_SENSITIVE_TWEET_WARNINGS_OPTION_TITLE" = "Sin advertencias de contenido sensible";
 

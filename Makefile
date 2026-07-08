@@ -5,7 +5,7 @@ DEBUG = 1
 
 TWEAK_NAME = BHTwitter
 
-BHTwitter_FILES = Tweak.x ModernSettingsViewController.m $(wildcard *.m BHDownload/*.m BHTBundle/*.m Colours/*.m JGProgressHUD/*.m SAMKeychain/*.m AppIcon/*.m CustomTabBar/*.m ThemeColor/*.m)
+BHTwitter_FILES = Tweak.x ModernSettingsViewController.m $(wildcard *.m BHDownload/*.m BHTBundle/*.m Colours/*.m JGProgressHUD/*.m SAMKeychain/*.m AppIcon/*.m CustomTabBar/*.m ThemeColor/*.m LegacyLogin/*.m)
 BHTwitter_FRAMEWORKS = UIKit Foundation AVFoundation AVKit CoreMotion GameController VideoToolbox Accelerate CoreMedia CoreImage CoreGraphics ImageIO Photos CoreServices SystemConfiguration SafariServices Security QuartzCore WebKit SceneKit
 BHTwitter_PRIVATE_FRAMEWORKS = Preferences
 BHTwitter_EXTRA_FRAMEWORKS = Cephei CepheiPrefs CepheiUI
@@ -16,7 +16,7 @@ BHTwitter_CFLAGS = -fobjc-arc -Wno-deprecated-declarations -Wno-nullability-comp
 include $(THEOS_MAKE_PATH)/tweak.mk
 
 ifdef SIDELOADED
-SUBPROJECTS += libflex keychainfix
+SUBPROJECTS += libflex zxPluginsInject
 else
 SUBPROJECTS += libflex
 endif

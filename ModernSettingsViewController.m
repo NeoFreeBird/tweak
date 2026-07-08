@@ -6,6 +6,7 @@
 //
 
 #import "ModernSettingsViewController.h"
+#import "BHTManager.h"
 #import "BHTBundle/BHTBundle.h"
 #import "BHDimPalette.h"
 #import "Colours/Colours.h"
@@ -31,7 +32,7 @@
 - (instancetype)initWithAccount:(TFNTwitterAccount *)account;
 @end
 
-@interface MessagesSettingsViewController : UIViewController
+@interface SearchSettingsViewController : UIViewController
 - (instancetype)initWithAccount:(TFNTwitterAccount *)account;
 @end
 
@@ -130,7 +131,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
 
     self.titleLabel = [[UILabel alloc] init];
     self.titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     self.titleLabel.font = [fontGroup performSelector:@selector(bodyBoldFont)];
     self.titleLabel.textColor = [UIColor labelColor];
     [self.contentView addSubview:self.titleLabel];
@@ -214,7 +215,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     [self updateIconColors];
     [self updateSubtitleColor];
     if (previousTraitCollection.preferredContentSizeCategory != self.traitCollection.preferredContentSizeCategory) {
-        id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+        id fontGroup = [BHTManager sharedFontGroup];
         self.titleLabel.font = [fontGroup performSelector:@selector(bodyBoldFont)];
         self.subtitleLabel.font = [fontGroup performSelector:@selector(subtext2Font)];
     }
@@ -236,7 +237,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
 - (void)setupViews {
     self.titleLabel = [[UILabel alloc] init];
     self.titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     self.titleLabel.font = [fontGroup performSelector:@selector(bodyBoldFont)];
     self.titleLabel.textColor = [UIColor labelColor];
     [self.contentView addSubview:self.titleLabel];
@@ -284,7 +285,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     self.backgroundColor = [BHDimPalette currentBackgroundColor];
     [self updateChevronColor];
     if (previousTraitCollection.preferredContentSizeCategory != self.traitCollection.preferredContentSizeCategory) {
-        id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+        id fontGroup = [BHTManager sharedFontGroup];
         self.titleLabel.font = [fontGroup performSelector:@selector(bodyBoldFont)];
     }
 }
@@ -305,7 +306,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
 - (void)setupViews {
     self.titleLabel = [[UILabel alloc] init];
     self.titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     self.titleLabel.font = [fontGroup performSelector:@selector(bodyBoldFont)];
     self.titleLabel.textColor = [UIColor labelColor];
     [self.contentView addSubview:self.titleLabel];
@@ -377,7 +378,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     [self updateChevronColor];
     [self updateSubtitleColor];
     if (previousTraitCollection.preferredContentSizeCategory != self.traitCollection.preferredContentSizeCategory) {
-        id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+        id fontGroup = [BHTManager sharedFontGroup];
         self.titleLabel.font = [fontGroup performSelector:@selector(bodyBoldFont)];
         self.subtitleLabel.font = [fontGroup performSelector:@selector(subtext2Font)];
     }
@@ -428,7 +429,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
 }
 
 - (void)applyTheme {
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     self.titleLabel.font = [fontGroup performSelector:@selector(bodyBoldFont)];
     self.subtitleLabel.font = [fontGroup performSelector:@selector(subtext2Font)];
     Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
@@ -540,7 +541,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     detailLabel.numberOfLines = 0;
     detailLabel.text = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_PLACEHOLDER_DETAIL_TEXT"];
 
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     if (fontGroup) {
         if ([fontGroup respondsToSelector:@selector(bodyBoldFont)]) {
             titleLabel.font = [fontGroup performSelector:@selector(bodyBoldFont)];
@@ -585,27 +586,6 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
 
 @implementation ModernSettingsViewController
 
-- (void)colorPickerViewControllerDidSelectColor:(UIColorPickerViewController *)viewController {
-    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"change_msg_background"];
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"background_image"];
-
-    UIColor *selectedColor = viewController.selectedColor;
-    if ([selectedColor respondsToSelector:@selector(hexString)]) {
-        [[NSUserDefaults standardUserDefaults] setObject:selectedColor.hexString forKey:@"background_color"];
-    } else {
-        // Fallback: convert to hex manually
-        CGFloat r, g, b, a;
-        [selectedColor getRed:&r green:&g blue:&b alpha:&a];
-        NSString *hexString = [NSString stringWithFormat:@"#%02lX%02lX%02lX",
-                               lroundf(r * 255),
-                               lroundf(g * 255),
-                               lroundf(b * 255)];
-        [[NSUserDefaults standardUserDefaults] setObject:hexString forKey:@"background_color"];
-    }
-
-    [[NSUserDefaults standardUserDefaults] synchronize];
-}
-
 #pragma mark - Section Headers
 
 - (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
@@ -620,7 +600,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
         subtitleLabel.numberOfLines = 0;
         subtitleLabel.textAlignment = NSTextAlignmentLeft;
 
-        id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+        id fontGroup = [BHTManager sharedFontGroup];
         subtitleLabel.font = [fontGroup performSelector:@selector(subtext2Font)];
 
         Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
@@ -671,7 +651,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
     titleLabel.text = title;
 
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     titleLabel.font = [fontGroup performSelector:@selector(headline1BoldFont)];
 
     Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
@@ -748,9 +728,6 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
         @{ @"title": [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_SEARCH_TITLE"],
            @"subtitle": [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_SEARCH_SUBTITLE"],
            @"icon": @"search_stroke", @"action": @"showSearchSettings" },
-        @{ @"title": [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_MESSAGES_TITLE"],
-           @"subtitle": [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_MESSAGES_SUBTITLE"],
-           @"icon": @"messages_stroke", @"action": @"showMessagesSettings" },
         @{ @"title": [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_WEB_TITLE"],
            @"subtitle": [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_WEB_SUBTITLE"],
            @"icon": @"globe_stroke", @"action": @"showWebSettings" },
@@ -775,7 +752,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
         @{ @"title": @"Thea 🐾", @"username": @"nyaathea", @"avatarURL": @"https://unavatar.io/github/nyathea?fallback=https://neofreebird.com/images/theameoww.png", @"userID": @"1541742676009226241" },
         @{ @"title": @"timi2506", @"username": @"timi2506", @"avatarURL": @"https://unavatar.io/github/timi2506?fallback=https://neofreebird.com/images/timi2506.png", @"userID": @"1684856685486063616" }
     ];
-    
+
     self.coolKidsCells = @[
         @{ @"title": @"Eevee", @"username": @"whoeevee1", @"avatarURL": @"https://unavatar.io/github/whoeevee?fallback=https://neofreebird.com/images/whoeevee.png", @"userID": @"1547956497342115844" },
         @{ @"title": @"zxcvbn", @"username": @"zxxvbn0", @"avatarURL": @"https://unavatar.io/x/zxxvbn0?fallback=https://neofreebird.com/images/zxxvbn0.png", @"userID": @"1678444396717514760" }
@@ -996,7 +973,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     UIImageView *avatarImageView = [cell.contentView viewWithTag:100];
     UILabel *nameLabel = [cell.contentView viewWithTag:101];
     UILabel *usernameLabel = [cell.contentView viewWithTag:102];
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
     id settings = [TAEColorSettingsCls sharedSettings];
     id currentPalette = [settings currentColorPalette];
@@ -1093,11 +1070,6 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     [self.navigationController pushViewController:vc animated:YES];
 }
 
-- (void)showMessagesSettings {
-    MessagesSettingsViewController *vc = [[MessagesSettingsViewController alloc] initWithAccount:self.account];
-    [self.navigationController pushViewController:vc animated:YES];
-}
-
 - (void)showBrandingSettings {
     BrandingSettingsViewController *vc = [[BrandingSettingsViewController alloc] initWithAccount:self.account];
     [self.navigationController pushViewController:vc animated:YES];
@@ -1114,9 +1086,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
 }
 
 - (void)showSearchSettings {
-    ModernSettingsPlaceholderViewController *vc =
-        [[ModernSettingsPlaceholderViewController alloc] initWithAccount:self.account
-                                                                titleKey:@"MODERN_SETTINGS_SEARCH_TITLE"];
+    SearchSettingsViewController *vc = [[SearchSettingsViewController alloc] initWithAccount:self.account];
     [self.navigationController pushViewController:vc animated:YES];
 }
 
@@ -1246,7 +1216,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     label.translatesAutoresizingMaskIntoConstraints = NO;
     label.text = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_TWITTER_BLUE_SUBTITLE"];
     label.numberOfLines = 0;
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     label.font = [fontGroup performSelector:@selector(subtext2Font)];
     Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
     id settings = [TAEColorSettingsCls sharedSettings];
@@ -1399,7 +1369,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     label.translatesAutoresizingMaskIntoConstraints = NO;
     label.text = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_MEDIA_SUBTITLE"];
     label.numberOfLines = 0;
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     label.font = [fontGroup performSelector:@selector(subtext2Font)];
     Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
     id settings = [TAEColorSettingsCls sharedSettings];
@@ -1522,7 +1492,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     label.translatesAutoresizingMaskIntoConstraints = NO;
     label.text = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_PROFILES_SUBTITLE"];
     label.numberOfLines = 0;
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     label.font = [fontGroup performSelector:@selector(subtext2Font)];
     Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
     id settings = [TAEColorSettingsCls sharedSettings];
@@ -1561,7 +1531,124 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     [alert addAction:[UIAlertAction actionWithTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"RESTART_NOW_BUTTON_TITLE"] style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {exit(0);}]];
     [self presentViewController:alert animated:YES completion:nil];
 }
-    
+
+
+@end
+
+// ==============================
+// SearchSettingsViewController
+// ==============================
+@interface SearchSettingsViewController () <UITableViewDataSource, UITableViewDelegate>
+@property (nonatomic, strong) TFNTwitterAccount *account;
+@property (nonatomic, strong) UITableView *tableView;
+@property (nonatomic, strong) NSArray<NSDictionary *> *settings;
+@end
+
+@implementation SearchSettingsViewController
+
+- (instancetype)initWithAccount:(TFNTwitterAccount *)account {
+    if ((self = [super init])) {
+        self.account = account;
+        [self buildSettingsList];
+    }
+    return self;
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    [self setupNav];
+    [self setupTable];
+}
+
+- (void)setupNav {
+    NSString *title = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_SEARCH_TITLE"];
+    if (self.account) {
+        self.navigationItem.titleView = [objc_getClass("TFNTitleView") titleViewWithTitle:title subtitle:self.account.displayUsername];
+    } else {
+        self.title = title;
+    }
+}
+
+- (void)setupTable {
+    self.view.backgroundColor = [BHDimPalette currentBackgroundColor];
+    self.tableView = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStyleGrouped];
+    self.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    self.tableView.dataSource = self;
+    self.tableView.delegate = self;
+    self.tableView.backgroundColor = [BHDimPalette currentBackgroundColor];
+    self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+    self.tableView.rowHeight = UITableViewAutomaticDimension;
+    self.tableView.showsVerticalScrollIndicator = NO;
+    self.tableView.showsHorizontalScrollIndicator = NO;
+    self.tableView.estimatedRowHeight = 80;
+    [self.tableView registerClass:[ModernSettingsToggleCell class] forCellReuseIdentifier:@"ToggleCell"];
+    [self.view addSubview:self.tableView];
+}
+
+- (void)buildSettingsList {
+    self.settings = @[
+        @{ @"key": @"no_his", @"titleKey": @"NO_HISTORY_OPTION_TITLE", @"subtitleKey": @"NO_HISTORY_OPTION_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" },
+        @{ @"key": @"hide_trends", @"titleKey": @"HIDE_TRENDS_OPTION_TITLE", @"subtitleKey": @"HIDE_TRENDS_OPTION_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" },
+        @{ @"key": @"hide_trend_videos", @"titleKey": @"HIDE_TREND_VIDEOS_OPTION_TITLE", @"subtitleKey": @"HIDE_TREND_VIDEOS_OPTION_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" }
+    ];
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return self.settings.count;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    NSDictionary *settingData = self.settings[indexPath.row];
+    ModernSettingsToggleCell *cell = [tableView dequeueReusableCellWithIdentifier:@"ToggleCell" forIndexPath:indexPath];
+    NSString *title = [[BHTBundle sharedBundle] localizedStringForKey:settingData[@"titleKey"]];
+    NSString *subtitleKey = settingData[@"subtitleKey"];
+    NSString *subtitle = (subtitleKey.length > 0) ? [[BHTBundle sharedBundle] localizedStringForKey:subtitleKey] : @"";
+    [cell configureWithTitle:title subtitle:subtitle];
+    NSString *key = settingData[@"key"];
+    BOOL isEnabled = [[[NSUserDefaults standardUserDefaults] objectForKey:key] ?: settingData[@"default"] boolValue];
+    cell.toggleSwitch.on = isEnabled;
+    objc_setAssociatedObject(cell.toggleSwitch, @"prefKey", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [cell addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
+    return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+}
+
+- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
+    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.frame.size.width, 0)];
+    UILabel *label = [[UILabel alloc] init];
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    label.text = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_SEARCH_SUBTITLE"];
+    label.numberOfLines = 0;
+    id fontGroup = [BHTManager sharedFontGroup];
+    label.font = [fontGroup performSelector:@selector(subtext2Font)];
+    Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
+    id settings = [TAEColorSettingsCls sharedSettings];
+    id colorPalette = [[settings currentColorPalette] colorPalette];
+    UIColor *subtitleColor = [colorPalette performSelector:@selector(tabBarItemColor)];
+    label.textColor = subtitleColor;
+    [header addSubview:label];
+    [NSLayoutConstraint activateConstraints:@[
+        [label.leadingAnchor constraintEqualToAnchor:header.leadingAnchor constant:20],
+        [label.trailingAnchor constraintEqualToAnchor:header.trailingAnchor constant:-20],
+        [label.topAnchor constraintEqualToAnchor:header.topAnchor constant:8],
+        [label.bottomAnchor constraintEqualToAnchor:header.bottomAnchor constant:-8]
+    ]];
+    return header;
+}
+
+- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
+    return UITableViewAutomaticDimension;
+}
+
+- (void)switchChanged:(UISwitch *)sender {
+    NSString *key = objc_getAssociatedObject(sender, @"prefKey");
+    if (key) {
+        [[NSUserDefaults standardUserDefaults] setBool:sender.isOn forKey:key];
+    }
+}
 
 @end
 
@@ -1623,7 +1710,9 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
         @{ @"key": @"hide_blue_verified", @"titleKey": @"HIDE_BLUE_VERIFIED_OPTION_TITLE", @"subtitleKey": @"HIDE_BLUE_VERIFIED_OPTION_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" },
         @{ @"key": @"hide_view_count", @"titleKey": @"HIDE_VIEW_COUNT_OPTION_TITLE", @"subtitleKey": @"HIDE_VIEW_COUNT_OPTION_DETAIL_TITLE", @"default": @YES, @"type": @"toggle" },
         @{ @"key": @"hide_bookmark_button", @"titleKey": @"HIDE_MARKBOOK_BUTTON_OPTION_TITLE", @"subtitleKey": @"HIDE_MARKBOOK_BUTTON_OPTION_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" },
+        @{ @"key": @"hide_downvote_button", @"titleKey": @"HIDE_DOWNVOTE_BUTTON_OPTION_TITLE", @"subtitleKey": @"HIDE_DOWNVOTE_BUTTON_OPTION_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" },
         @{ @"key": @"disableSensitiveTweetWarnings", @"titleKey": @"DISABLE_SENSITIVE_TWEET_WARNINGS_OPTION_TITLE", @"subtitleKey": @"", @"default": @YES, @"type": @"toggle" },
+        @{ @"key": @"bypass_age_verification", @"titleKey": @"BYPASS_AGE_VERIFICATION_OPTION_TITLE", @"subtitleKey": @"BYPASS_AGE_VERIFICATION_OPTION_DETAIL_TITLE", @"default": @YES, @"type": @"toggle" },
         @{ @"key": @"hide_grok_analyze", @"titleKey": @"HIDE_GROK_ANALYZE_BUTTON_TITLE", @"subtitleKey": @"HIDE_GROK_ANALYZE_BUTTON_DETAIL_TITLE", @"default": @YES, @"type": @"toggle" },
         @{ @"key": @"reply_sorting_enabled", @"titleKey": @"REPLY_SORTING_TITLE", @"subtitleKey": @"REPLY_SORTING_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" },
         @{ @"key": @"restore_reply_context", @"titleKey": @"RESTORE_REPLY_CONTEXT_TITLE", @"subtitleKey": @"RESTORE_REPLY_CONTEXT_DETAIL_TITLE", @"default": @YES, @"type": @"toggle" }
@@ -1659,169 +1748,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     label.translatesAutoresizingMaskIntoConstraints = NO;
     label.text = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_TWEETS_SUBTITLE"];
     label.numberOfLines = 0;
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
-    label.font = [fontGroup performSelector:@selector(subtext2Font)];
-    Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
-    id settings = [TAEColorSettingsCls sharedSettings];
-    id colorPalette = [[settings currentColorPalette] colorPalette];
-    UIColor *subtitleColor = [colorPalette performSelector:@selector(tabBarItemColor)];
-    label.textColor = subtitleColor;
-    [header addSubview:label];
-    [NSLayoutConstraint activateConstraints:@[
-        [label.leadingAnchor constraintEqualToAnchor:header.leadingAnchor constant:20],
-        [label.trailingAnchor constraintEqualToAnchor:header.trailingAnchor constant:-20],
-        [label.topAnchor constraintEqualToAnchor:header.topAnchor constant:8],
-        [label.bottomAnchor constraintEqualToAnchor:header.bottomAnchor constant:-8]
-    ]];
-    return header;
-}
-
-- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section {
-    return UITableViewAutomaticDimension;
-}
-
-@end
-
-// ==============================
-// MessagesSettingsViewController
-// ==============================
-@interface MessagesSettingsViewController () <UITableViewDataSource, UITableViewDelegate, UIImagePickerControllerDelegate, UINavigationControllerDelegate, UIColorPickerViewControllerDelegate>
-@property (nonatomic, strong) TFNTwitterAccount *account;
-@property (nonatomic, strong) UITableView *tableView;
-@property (nonatomic, strong) NSArray<NSDictionary *> *settings;
-@end
-
-@implementation MessagesSettingsViewController
-
-#pragma mark - Image Picker Delegate
-- (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary<UIImagePickerControllerInfoKey,id> *)info {
-    NSFileManager *manager = [NSFileManager defaultManager];
-    NSString *docPath = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
-    NSURL *oldImgPath = info[UIImagePickerControllerImageURL];
-    NSURL *newImgPath = [[NSURL fileURLWithPath:docPath] URLByAppendingPathComponent:@"msg_background.png"];
-
-    if ([manager fileExistsAtPath:newImgPath.path]) {
-        [manager removeItemAtURL:newImgPath error:nil];
-    }
-    [manager copyItemAtURL:oldImgPath toURL:newImgPath error:nil];
-
-    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"change_msg_background"];
-    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"background_image"];
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"background_color"];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-
-    [picker dismissViewControllerAnimated:YES completion:nil];
-}
-
-#pragma mark - Color Picker Delegate
-- (void)colorPickerViewControllerDidSelectColor:(UIColorPickerViewController *)viewController {
-    [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"change_msg_background"];
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"background_image"];
-    [[NSUserDefaults standardUserDefaults] setObject:viewController.selectedColor.hexString forKey:@"background_color"];
-    [[NSUserDefaults standardUserDefaults] synchronize];
-}
-
-- (instancetype)initWithAccount:(TFNTwitterAccount *)account {
-    if ((self = [super init])) {
-        self.account = account;
-        [self buildSettingsList];
-    }
-    return self;
-}
-
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    [self setupNav];
-    [self setupTable];
-}
-
-- (void)setupNav {
-    NSString *title = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_MESSAGES_TITLE"];
-    if (self.account) {
-        self.navigationItem.titleView = [objc_getClass("TFNTitleView") titleViewWithTitle:title subtitle:self.account.displayUsername];
-    } else {
-        self.title = title;
-    }
-}
-
-- (void)setupTable {
-    self.view.backgroundColor = [BHDimPalette currentBackgroundColor];
-    self.tableView = [[UITableView alloc] initWithFrame:self.view.bounds style:UITableViewStyleGrouped];
-    self.tableView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    self.tableView.dataSource = self;
-    self.tableView.delegate = self;
-    self.tableView.backgroundColor = [BHDimPalette currentBackgroundColor];
-    self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
-    self.tableView.rowHeight = UITableViewAutomaticDimension;
-    self.tableView.showsVerticalScrollIndicator = NO;
-    self.tableView.showsHorizontalScrollIndicator = NO;
-    self.tableView.estimatedRowHeight = 80;
-    [self.tableView registerClass:[ModernSettingsToggleCell class] forCellReuseIdentifier:@"ToggleCell"];
-    [self.tableView registerClass:[ModernSettingsSimpleButtonCell class] forCellReuseIdentifier:@"SimpleButtonCell"];
-    [self.view addSubview:self.tableView];
-}
-
-- (void)buildSettingsList {
-    self.settings = @[
-        @{ @"key": @"dm_avatars", @"titleKey": @"DM_AVATARS_TITLE", @"subtitleKey": @"DM_AVATARS_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" },
-        @{ @"key": @"dm_compose_bar_v2_enabled", @"titleKey": @"DM_COMPOSE_BAR_V2_TITLE", @"subtitleKey": @"DM_COMPOSE_BAR_V2_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" },
-        @{ @"key": @"dm_voice_creation_enabled", @"titleKey": @"DM_VOICE_CREATION_TITLE", @"subtitleKey": @"DM_VOICE_CREATION_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" },
-        //@{ @"key": @"disable_xchat", @"titleKey": @"DISABLE_XCHAT_OPTION_TITLE", @"subtitleKey": @"DISABLE_XCHAT_OPTION_DETAIL_TITLE", @"default": @YES, @"type": @"toggle" },
-        @{ @"titleKey": @"CUSTOM_DIRECT_BACKGROUND_VIEW_TITLE", @"subtitleKey": @"CUSTOM_DIRECT_BACKGROUND_VIEW_DETAIL_TITLE", @"action": @"showCustomBackgroundOptions:", @"type": @"button" }
-    ];
-}
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return self.settings.count;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    NSDictionary *settingData = self.settings[indexPath.row];
-    NSString *type = settingData[@"type"];
-    if ([type isEqualToString:@"button"]) {
-        ModernSettingsSimpleButtonCell *cell = [tableView dequeueReusableCellWithIdentifier:@"SimpleButtonCell" forIndexPath:indexPath];
-        NSString *title = [[BHTBundle sharedBundle] localizedStringForKey:settingData[@"titleKey"]];
-        [cell configureWithTitle:title];
-        return cell;
-    } else {
-        ModernSettingsToggleCell *cell = [tableView dequeueReusableCellWithIdentifier:@"ToggleCell" forIndexPath:indexPath];
-        NSString *title = [[BHTBundle sharedBundle] localizedStringForKey:settingData[@"titleKey"]];
-        NSString *subtitleKey = settingData[@"subtitleKey"];
-        NSString *subtitle = (subtitleKey.length > 0) ? [[BHTBundle sharedBundle] localizedStringForKey:subtitleKey] : @"";
-        [cell configureWithTitle:title subtitle:subtitle];
-        NSString *key = settingData[@"key"];
-        BOOL isEnabled = [[[NSUserDefaults standardUserDefaults] objectForKey:key] ?: settingData[@"default"] boolValue];
-        cell.toggleSwitch.on = isEnabled;
-        objc_setAssociatedObject(cell.toggleSwitch, @"prefKey", key, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        [cell addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
-        return cell;
-    }
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    NSDictionary *data = self.settings[indexPath.row];
-    if ([data[@"type"] isEqualToString:@"button"]) {
-        NSString *actionName = data[@"action"];
-        if (actionName) {
-            SEL action = NSSelectorFromString(actionName);
-            if ([self respondsToSelector:action]) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-                [self performSelector:action withObject:data];
-#pragma clang diagnostic pop
-            }
-        }
-    }
-}
-
-- (UIView *)tableView:(UITableView *)tableView viewForHeaderInSection:(NSInteger)section {
-    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, tableView.frame.size.width, 0)];
-    UILabel *label = [[UILabel alloc] init];
-    label.translatesAutoresizingMaskIntoConstraints = NO;
-    label.text = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_MESSAGES_SUBTITLE"];
-    label.numberOfLines = 0;
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     label.font = [fontGroup performSelector:@selector(subtext2Font)];
     Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
     id settings = [TAEColorSettingsCls sharedSettings];
@@ -1847,58 +1774,6 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     if (key) {
         [[NSUserDefaults standardUserDefaults] setBool:sender.isOn forKey:key];
     }
-}
-
-- (void)showCustomBackgroundOptions:(NSDictionary *)sender {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"NeoFreeBird" message:[[BHTBundle sharedBundle] localizedStringForKey:@"CUSTOM_DIRECT_BACKGROUND_VIEW_DETAIL_TITLE"] preferredStyle:UIAlertControllerStyleActionSheet];
-    if (alert.popoverPresentationController != nil) {
-        UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:self.settings.count - 1 inSection:0]];
-        alert.popoverPresentationController.sourceView = cell;
-        alert.popoverPresentationController.sourceRect = cell.bounds;
-    }
-    UIAlertAction *imageAction = [UIAlertAction actionWithTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"CUSTOM_DIRECT_BACKGROUND_ALERT_OPTION_1"] style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
-        [self showImagePicker];
-    }];
-    UIAlertAction *colorAction = [UIAlertAction actionWithTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"CUSTOM_DIRECT_BACKGROUND_ALERT_OPTION_2"] style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
-        [self showColorPicker];
-    }];
-    UIAlertAction *resetAction = [UIAlertAction actionWithTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"CUSTOM_DIRECT_BACKGROUND_ALERT_OPTION_3"] style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
-        [self resetBackgroundCustomization];
-    }];
-    UIAlertAction *cancel = [UIAlertAction actionWithTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"CANCEL_BUTTON_TITLE"] style:UIAlertActionStyleCancel handler:nil];
-    [alert addAction:imageAction];
-    [alert addAction:colorAction];
-    [alert addAction:resetAction];
-    [alert addAction:cancel];
-    [self presentViewController:alert animated:YES completion:nil];
-}
-
-- (void)showImagePicker {
-    UIImagePickerController *imagePicker = [[UIImagePickerController alloc] init];
-    imagePicker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-    imagePicker.delegate = (id<UIImagePickerControllerDelegate, UINavigationControllerDelegate>)self;
-    [self presentViewController:imagePicker animated:YES completion:nil];
-}
-
-- (void)showColorPicker {
-    if (@available(iOS 14.0, *)) {
-        UIColorPickerViewController *colorPicker = [[UIColorPickerViewController alloc] init];
-        colorPicker.delegate = (id<UIColorPickerViewControllerDelegate>)self;
-        [self presentViewController:colorPicker animated:YES completion:nil];
-    }
-}
-
-- (void)resetBackgroundCustomization {
-    [[NSUserDefaults standardUserDefaults] setBool:NO forKey:@"change_msg_background"];
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"background_image"];
-    [[NSUserDefaults standardUserDefaults] removeObjectForKey:@"background_color"];
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"RESET_COMPLETE_TITLE"]
-                                                                   message:[[BHTBundle sharedBundle] localizedStringForKey:@"BACKGROUND_RESET_MESSAGE"]
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"OK_BUTTON_TITLE"]
-                                              style:UIAlertActionStyleDefault
-                                            handler:nil]];
-    [self presentViewController:alert animated:YES completion:nil];
 }
 
 @end
@@ -1962,9 +1837,9 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
 
 - (void)buildSettingsList {
     self.toggles = @[
-        @{@"key": @"notif_replace_post_with_tweet", @"titleKey": @"NOTIF_REPLACE_POST_WITH_TWEET_OPTION_TITLE", @"subtitleKey": @"NOTIF_REPLACE_POST_WITH_TWEET_DETAIL_TITLE", @"default": @YES, @"type": @"toggle"},
-        @{@"key": @"refresh_pill_label", @"titleKey": @"REFRESH_PILL_OPTION_TITLE", @"subtitleKey": @"REFRESH_PILL_DETAIL_TITLE", @"default": @YES, @"type": @"toggle"},
-        @{@"key": @"color_twitter_icon_in_top_bar", @"titleKey": @"COLOR_TWITTER_ICON_OPTION_TITLE", @"subtitleKey": @"COLOR_TWITTER_ICON_DETAIL_TITLE", @"default": @YES, @"type": @"toggle"}
+        @{@"key": @"restore_twitter_names", @"titleKey": @"RESTORE_TWITTER_NAMES_OPTION_TITLE", @"subtitleKey": @"RESTORE_TWITTER_NAMES_OPTION_DETAIL_TITLE", @"default": @([BHTManager isTwitterBranded]), @"type": @"toggle"},
+        @{@"key": @"refresh_pill_label", @"titleKey": @"REFRESH_PILL_OPTION_TITLE", @"subtitleKey": @"REFRESH_PILL_DETAIL_TITLE", @"default": @([BHTManager isTwitterBranded]), @"type": @"toggle"},
+        @{@"key": @"color_twitter_icon_in_top_bar", @"titleKey": @"COLOR_TWITTER_ICON_OPTION_TITLE", @"subtitleKey": @"COLOR_TWITTER_ICON_DETAIL_TITLE", @"default": @([BHTManager isTwitterBranded]), @"type": @"toggle"}
     ];
     [self.tableView reloadData];
 }
@@ -2014,7 +1889,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     label.text = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_BRANDING_SUBTITLE"];
     label.numberOfLines = 0;
 
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     label.font = [fontGroup performSelector:@selector(subtext2Font)];
 
     Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
@@ -2108,7 +1983,9 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
 
 - (void)buildSettingsList {
     self.toggles = @[
-        @{ @"key": @"restore_tweet_labels", @"titleKey": @"ENABLE_TWEET_LABELS_OPTION_TITLE", @"subtitleKey": @"ENABLE_TWEET_LABELS_OPTION_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" }
+        @{ @"key": @"restore_tweet_labels", @"titleKey": @"ENABLE_TWEET_LABELS_OPTION_TITLE", @"subtitleKey": @"ENABLE_TWEET_LABELS_OPTION_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" },
+        @{ @"key": @"attestation_bypass_enabled", @"titleKey": @"ATTESTATION_BYPASS_OPTION_TITLE", @"subtitleKey": @"ATTESTATION_BYPASS_OPTION_DETAIL_TITLE", @"default": @YES, @"type": @"toggle" },
+        @{ @"key": @"reply_in_webview", @"titleKey": @"REPLY_IN_WEBVIEW_OPTION_TITLE", @"subtitleKey": @"REPLY_IN_WEBVIEW_OPTION_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" }
     ];
     [self updateVisibleToggles];
     [self.tableView reloadData];
@@ -2203,7 +2080,7 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     label.translatesAutoresizingMaskIntoConstraints = NO;
     label.text = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_EXPERIMENTAL_SUBTITLE"];
     label.numberOfLines = 0;
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     label.font = [fontGroup performSelector:@selector(subtext2Font)];
     Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
     id settings = [TAEColorSettingsCls sharedSettings];
@@ -2437,7 +2314,7 @@ if ([type isEqualToString:@"compactButton"]) {
     label.translatesAutoresizingMaskIntoConstraints = NO;
     label.text = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_WEB_SUBTITLE"];
     label.numberOfLines = 0;
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     label.font = [fontGroup performSelector:@selector(subtext2Font)];
     Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
     id settings = [TAEColorSettingsCls sharedSettings];
@@ -2647,7 +2524,7 @@ if ([type isEqualToString:@"compactButton"]) {
 }
 
 - (void)buildSettingsList {
-    self.toggles = @[ @{ @"key": @"flex_twitter", @"titleKey": @"FLEX_OPTION_TITLE", @"subtitleKey": @"FLEX_OPTION_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" } 
+    self.toggles = @[ @{ @"key": @"flex_twitter", @"titleKey": @"FLEX_OPTION_TITLE", @"subtitleKey": @"FLEX_OPTION_DETAIL_TITLE", @"default": @NO, @"type": @"toggle" }
     ];
     [self updateVisibleToggles];
     [self.tableView reloadData];
@@ -2742,7 +2619,7 @@ if ([type isEqualToString:@"compactButton"]) {
     label.translatesAutoresizingMaskIntoConstraints = NO;
     label.text = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_DEBUG_SUBTITLE"];
     label.numberOfLines = 0;
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     label.font = [fontGroup performSelector:@selector(subtext2Font)];
     Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
     id settings = [TAEColorSettingsCls sharedSettings];
@@ -2921,9 +2798,8 @@ if ([type isEqualToString:@"compactButton"]) {
         @{ @"key": @"hide_topics", @"titleKey": @"HIDE_TOPICS_OPTION_TITLE", @"subtitleKey": @"HIDE_TOPICS_OPTION_DETAIL_TITLE", @"default": @YES },
         @{ @"key": @"hide_topics_to_follow", @"titleKey": @"HIDE_TOPICS_TO_FOLLOW_OPTION", @"subtitleKey": @"HIDE_TOPICS_TO_FOLLOW_OPTION_DETAIL_TITLE", @"default": @YES },
         @{ @"key": @"hide_who_to_follow", @"titleKey": @"HIDE_WHO_FOLLOW_OPTION", @"subtitleKey": @"HIDE_WHO_FOLLOW_OPTION_DETAIL_TITLE", @"default": @YES },
-        @{ @"key": @"no_his", @"titleKey": @"NO_HISTORY_OPTION_TITLE", @"subtitleKey": @"NO_HISTORY_OPTION_DETAIL_TITLE", @"default": @NO },
-        @{ @"key": @"hide_trend_videos", @"titleKey": @"HIDE_TREND_VIDEOS_OPTION_TITLE", @"subtitleKey": @"HIDE_TREND_VIDEOS_OPTION_DETAIL_TITLE", @"default": @NO },
         @{ @"key": @"hide_spaces", @"titleKey": @"HIDE_SPACE_OPTION_TITLE", @"subtitleKey": @"", @"default": @NO },
+        @{ @"key": @"hide_custom_timelines", @"titleKey": @"HIDE_CUSTOM_TIMELINES_OPTION_TITLE", @"subtitleKey": @"HIDE_CUSTOM_TIMELINES_OPTION_DETAIL_TITLE", @"default": @NO },
         @{ @"key": @"no_tab_bar_hiding", @"titleKey": @"STOP_HIDING_TAB_BAR_TITLE", @"subtitleKey": @"STOP_HIDING_TAB_BAR_DETAIL_TITLE", @"default": @YES },
         @{ @"key": @"tab_bar_theming", @"titleKey": @"CLASSIC_TAB_BAR_SETTINGS_TITLE", @"subtitleKey": @"CLASSIC_TAB_BAR_SETTINGS_DETAIL", @"default": @NO },
         @{ @"key": @"restore_tab_labels", @"titleKey": @"RESTORE_TAB_LABELS_TITLE", @"subtitleKey": @"RESTORE_TAB_LABELS_DETAIL", @"default": @NO },
@@ -3024,7 +2900,7 @@ if ([type isEqualToString:@"compactButton"]) {
     label.translatesAutoresizingMaskIntoConstraints = NO;
     label.text = [[BHTBundle sharedBundle] localizedStringForKey:@"MODERN_SETTINGS_LAYOUT_SUBTITLE"];
     label.numberOfLines = 0;
-    id fontGroup = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    id fontGroup = [BHTManager sharedFontGroup];
     label.font = [fontGroup performSelector:@selector(subtext2Font)];
     Class TAEColorSettingsCls = objc_getClass("TAEColorSettings");
     id settings = [TAEColorSettingsCls sharedSettings];

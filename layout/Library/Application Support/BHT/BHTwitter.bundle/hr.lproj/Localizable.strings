@@ -10,7 +10,6 @@
 "RESTART_REQUIRED_ALERT_TITLE" = "Potrebno ponovno pokretanje";
 "RESTART_REQUIRED_ALERT_MESSAGE" = "Morate ponovno pokrenuti Twitter da bi promjena stupila na snagu.";
 "RESTART_NOW_BUTTON_TITLE" = "Ponovno pokreni";
-"MODERN_LAYOUT_RESTART_MESSAGE" = "Za prelazak između modernog i klasičnog izgleda morate ponovno pokrenuti Twitter.";
 
 "CONFIRM_ALERT_MESSAGE" = "Jesi li siguran da to želiš?";
 "YES_BUTTON_TITLE" = "Da";
@@ -73,6 +72,8 @@
 
 "HIDE_MARKBOOK_BUTTON_OPTION_TITLE" = "Sakrij oznake";
 "HIDE_MARKBOOK_BUTTON_OPTION_DETAIL_TITLE" = "Ukloni gumb za spremanje tweetova.";
+"HIDE_DOWNVOTE_BUTTON_OPTION_TITLE" = "Sakrij negativne glasove";
+"HIDE_DOWNVOTE_BUTTON_OPTION_DETAIL_TITLE" = "Ukloni gumb za negativan glas iz tweetova.";
 
 "DISABLE_SENSITIVE_TWEET_WARNINGS_OPTION_TITLE" = "Bez upozorenja na osjetljiv sadržaj";
 

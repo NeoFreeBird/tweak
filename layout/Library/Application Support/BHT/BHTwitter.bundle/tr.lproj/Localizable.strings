@@ -10,7 +10,6 @@
 "RESTART_REQUIRED_ALERT_TITLE" = "Yeniden başlatma gerekli";
 "RESTART_REQUIRED_ALERT_MESSAGE" = "Bu değişikliğin geçerli olması için Twitter'ı yeniden başlatmanız gerekiyor.";
 "RESTART_NOW_BUTTON_TITLE" = "Şimdi yeniden başlat";
-"MODERN_LAYOUT_RESTART_MESSAGE" = "Modern ve klasik düzen arasında geçiş yapmak için Twitter'ı yeniden başlatmanız gerekiyor.";
 
 "CONFIRM_ALERT_MESSAGE" = "Bunu yapmak istediğine emin misin?";
 "YES_BUTTON_TITLE" = "Evet";
@@ -73,6 +72,8 @@
 
 "HIDE_MARKBOOK_BUTTON_OPTION_TITLE" = "Yer imlerini gizle";
 "HIDE_MARKBOOK_BUTTON_OPTION_DETAIL_TITLE" = "Tweet’lerden yer imi butonunu kaldır.";
+"HIDE_DOWNVOTE_BUTTON_OPTION_TITLE" = "Olumsuz oyları gizle";
+"HIDE_DOWNVOTE_BUTTON_OPTION_DETAIL_TITLE" = "Tweet’lerden olumsuz oy butonunu kaldır.";
 
 "DISABLE_SENSITIVE_TWEET_WARNINGS_OPTION_TITLE" = "Hassas içerik uyarısı yok";
 

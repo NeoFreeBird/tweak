@@ -1,13 +1,13 @@
 <div align="center">
     <img src="icon_rounded.png" alt="NeoFreeBird-BHTwitter" width="130" height="130">
- 
+
   # NeoFreeBird-BHTwitter (tweak)
   <i>The ultimate way to tweak your Twitter/X experience.</i>
 </div>
 <br>
 
-> [!WARNING]  
-> <b>Please do not create issues regarding sign in or Tweeting.</b><br>Twitter/X have added Attestation to prevent the use of third-paty or modified clients. We cannot do anything against this. Please do not create new issues regarding this. 
+> [!WARNING]
+> <b>Please do not create issues regarding sign in or Tweeting.</b><br>Twitter/X have added Attestation to prevent the use of third-paty or modified clients. We cannot do anything against this. Please do not create new issues regarding this.
 
 | | | |
 |:-------------------------:|:-------------------------:|:-------------------------:|
@@ -18,6 +18,9 @@
 ## Using your computer
 
 1. Install [Theos](https://github.com/theos/theos).
+
+> Note for Linux users: the current toolchain that ships with Theos is too outdated to build successfully ("Undefined symbols for architecture arm64"). Download the latest toolchain for your distro from [here](https://github.com/L1ghtmann/swift-toolchain-linux/releases/latest) and replace `$THEOS/toolchain/linux` with its contents.
+
 2. Install [cyan](https://github.com/asdfzxcvbn/pyzule-rw) if you want sideload or TrollStore builds.
 3. Clone the NeoFreeBird-BHTwitter repository:
 
@@ -102,10 +105,10 @@ Just run:
 Result: `com.bandarhl.bhtwitter_4.2_iphoneos-arm.deb` inside `packages`.
 
 
-> [!NOTE]  
+> [!NOTE]
 > <b>These builds are considered beta</b><br>This repo is meant for NeoFreeBird, which builds this for specific versions of Twitter. You can of course build this for your own app without using the main NeoFreeBird app, but please note your build will not be supported by the NeoFreeBird team if you do.
 
 
-> [!NOTE]  
-> <b>This repo is forked from BHTwitter.</b><br>It will merge patches upstream to BHTwitter when it's considered mostly done. 
+> [!NOTE]
+> <b>This repo is forked from BHTwitter.</b><br>It will merge patches upstream to BHTwitter when it's considered mostly done.
 

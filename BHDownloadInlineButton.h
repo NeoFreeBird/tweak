@@ -1,6 +1,6 @@
 //
 //  BHDownloadInlineButton.h
-//  NeoFreeBird, fixed for Twitter 10.94 / 10.94.1
+//  NeoFreeBird
 //
 //  Original author: BandarHelal at 09/04/2022
 //  Modified by: actuallyaridan at 27/04/2025
@@ -9,66 +9,13 @@
 @import UIKit;
 #import "BHTManager.h"
 
-@class T1StatusInlineActionsView; // Forward declaration instead of assuming it's imported
-
 NS_ASSUME_NONNULL_BEGIN
 
-@interface BHDownloadInlineButton : UIButton
-{
-    NSUInteger _displayType;
-    NSUInteger _inlineActionType;
-    __weak T1StatusInlineActionsView *_delegate; // Added weak reference
-    id _buttonAnimator;
-    id _viewModel;
-}
+// Presents the download quality/options sheet for a tweet's media. Formerly an
+// inline action-bar button; now driven from the tweet overflow (3-dot) menu.
+@interface BHDownloadInlineButton : NSObject
 
-+ (CGSize)buttonImageSizeUsingViewModel:(id)viewModel 
-                               options:(NSUInteger)options 
-                    overrideButtonSize:(CGSize)overrideSize 
-                             account:(id)account;
-
-@property (nonatomic, weak) T1StatusInlineActionsView *delegate; // Changed to weak
-@property (nonatomic, strong, nullable) id buttonAnimator;
-@property (nonatomic, assign) UIEdgeInsets hitTestEdgeInsets;
-@property (nonatomic, assign) UIEdgeInsets touchInsets;
-@property (nonatomic, assign) NSUInteger inlineActionType;
-@property (nonatomic, assign) NSUInteger displayType;
-@property (nonatomic, strong, nullable) id viewModel;
-
-- (void)setTouchInsets:(UIEdgeInsets)touchInsets;
-- (nullable id)_t1_imageNamed:(NSString *)name 
-                     fitSize:(CGSize)fitSize 
-                   fillColor:(nullable id)fillColor;
-- (BOOL)shouldShowCount;
-- (double)extraWidth;
-- (CGFloat)trailingEdgeInset;
-- (NSUInteger)touchInsetPriority;
-- (NSUInteger)alternateInlineActionType;
-- (NSUInteger)visibility;
-- (nullable NSString *)actionSheetTitle;
-- (BOOL)enabled;
-
-// Status update methods
-- (void)statusDidUpdate:(id)status 
-                options:(NSUInteger)options 
-    displayTextOptions:(NSUInteger)displayTextOptions 
-             animated:(BOOL)animated;
-
-- (void)statusDidUpdate:(id)status 
-                options:(NSUInteger)options 
-    displayTextOptions:(NSUInteger)displayTextOptions 
-             animated:(BOOL)animated 
-      featureSwitches:(nullable id)featureSwitches;
-
-// Initializers
-- (instancetype)initWithOptions:(NSUInteger)options 
-                  overrideSize:(nullable id)overrideSize 
-                       account:(nullable id)account;
-
-- (instancetype)initWithInlineActionType:(NSUInteger)inlineActionType 
-                                options:(NSUInteger)options 
-                          overrideSize:(nullable id)overrideSize 
-                               account:(nullable id)account;
+- (void)presentDownloadOptionsForMediaEntities:(NSArray *)mediaEntities;
 
 @end
 

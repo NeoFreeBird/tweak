@@ -9,7 +9,6 @@
 /*Alerts and popups*/
 "RESTART_REQUIRED_ALERT_TITLE" = "Restart required";
 "RESTART_REQUIRED_ALERT_MESSAGE" = "You need to restart Twitter for this change to take effect.";
-"MODERN_LAYOUT_RESTART_MESSAGE" = "To switch between the modern and classic layouts, you need to restart Twitter";
 
 "RESET_COMPLETE_TITLE" = "Reset successful";
 "BACKGROUND_RESET_MESSAGE" = "The Messages background was reset to default.";
@@ -126,8 +125,13 @@
 
 "HIDE_MARKBOOK_BUTTON_OPTION_TITLE" = "Hide bookmarks";
 "HIDE_MARKBOOK_BUTTON_OPTION_DETAIL_TITLE" = "Remove the bookmark button from Tweets.";
+"HIDE_DOWNVOTE_BUTTON_OPTION_TITLE" = "Hide downvotes";
+"HIDE_DOWNVOTE_BUTTON_OPTION_DETAIL_TITLE" = "Remove the downvote button from Tweets.";
 
 "DISABLE_SENSITIVE_TWEET_WARNINGS_OPTION_TITLE" = "No sensitive content warnings";
+
+"BYPASS_AGE_VERIFICATION_OPTION_TITLE" = "Bypass age verification";
+"BYPASS_AGE_VERIFICATION_OPTION_DETAIL_TITLE" = "Skips the age verification flow for sensitive content.";
 
 "HIDE_GROK_ANALYZE_BUTTON_TITLE" = "Hide Grok analyze buttons";
 "HIDE_GROK_ANALYZE_BUTTON_DETAIL_TITLE" = "Hides the Grok Analyze button in Tweets.";
@@ -231,7 +235,7 @@
 "MEDIA_UPLOAD_4K_ENABLED_OPTION_DETAIL_TITLE" = "Upload photos and videos in 4K.";
 
 "DOWNLOAD_VIDEOS_OPTION_TITLE" = "Download media";
-"DOWNLOAD_VIDEOS_OPTION_DETAIL_TITLE" = "Save videos or GIFs right from Tweets.";
+"DOWNLOAD_VIDEOS_OPTION_DETAIL_TITLE" = "Save videos or GIFs right from the Tweet overflow menu.";
 
 "DIRECT_SAVE_OPTION_TITLE" = "Save to Photos";
 "DIRECT_SAVE_OPTION_DETAIL_TITLE" = "Videos you save will go straight to your Photos app.";
@@ -259,6 +263,12 @@
 
 "STOP_HIDING_TAB_BAR_TITLE" = "Keep the navigation bar visible";
 "STOP_HIDING_TAB_BAR_DETAIL_TITLE" = "Don't fade the navigation bar when you scroll.";
+
+"HIDE_CUSTOM_TIMELINES_OPTION_TITLE" = "Hide custom timelines";
+"HIDE_CUSTOM_TIMELINES_OPTION_DETAIL_TITLE" = "Remove the Add button from the home timeline tabs. Required relaunching.";
+
+"HIDE_TRENDS_OPTION_TITLE" = "Hide trending content";
+"HIDE_TRENDS_OPTION_DETAIL_TITLE" = "Show only the search bar on the Explore tab, hiding all trends, news and the page tabs.";
 
 "CLASSIC_TAB_BAR_SETTINGS_TITLE" = "Classic tab bar";
 "CLASSIC_TAB_BAR_SETTINGS_DETAIL" = "Applies your accent color to the currently selected tab item.";
@@ -384,14 +394,14 @@
 /*Refresh pill text*/
 "REFRESH_PILL_TEXT" = "Tweeted";
 
-"NOTIF_REPLACE_POST_WITH_TWEET_OPTION_TITLE" = "Post to Tweet replacer in notifications";
-"NOTIF_REPLACE_POST_WITH_TWEET_DETAIL_TITLE" = "Replaces 'Post' with 'Tweet' in the notifications pane. This affects *all* text in notifications, so if a Tweet contains the word 'post', it will be replaced too.";
-
 "COLOR_TWITTER_ICON_OPTION_TITLE" = "Color Twitter icon";
 "COLOR_TWITTER_ICON_DETAIL_TITLE" = "Applies the accent color to the Twitter icon in the top bar.";
 
 "REFRESH_PILL_OPTION_TITLE" = "Add 'Tweeted' to refresh pill";
 "REFRESH_PILL_DETAIL_TITLE" = "Adds back the 'Tweeted' label to the refresh pill when someone Tweets. This may (incorrectly) appear in some other areas too.";
+
+"RESTORE_TWITTER_NAMES_OPTION_TITLE" = "Restore Twitter terminology";
+"RESTORE_TWITTER_NAMES_OPTION_DETAIL_TITLE" = "Replaces 'X' with 'Twitter', 'Post' with 'Tweet', 'Repost' with 'Retweet' and so on throughout the app's interface.";
 
 /*Presets*/
 
@@ -492,3 +502,9 @@
 
 "notif_Repost_old" = "Repost";
 "notif_Retweet_new" = "Retweet";
+
+"ATTESTATION_BYPASS_OPTION_TITLE" = "Strip attestation headers";
+"ATTESTATION_BYPASS_OPTION_DETAIL_TITLE" = "May or may not impact any feature.";
+
+"REPLY_IN_WEBVIEW_OPTION_TITLE" = "Reply in web view";
+"REPLY_IN_WEBVIEW_OPTION_DETAIL_TITLE" = "Open the reply box in a web view to avoid attestation.";

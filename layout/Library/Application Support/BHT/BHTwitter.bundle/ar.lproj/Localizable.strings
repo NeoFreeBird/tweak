@@ -11,7 +11,6 @@
 "RESTART_REQUIRED_ALERT_TITLE" = "مطلوب إعادة التشغيل";
 "RESTART_REQUIRED_ALERT_MESSAGE" = "يجب إعادة تشغيل تويتر لتفعيل هذا التغيير.";
 "RESTART_NOW_BUTTON_TITLE" = "أعد التشغيل الآن";
-"MODERN_LAYOUT_RESTART_MESSAGE" = "للتبديل بين التخطيط الحديث والكلاسيكي، يجب إعادة تشغيل تويتر.";
 
 "CONFIRM_ALERT_MESSAGE" = "هل أنت متأكد أنك تقصد ذلك؟";
 "YES_BUTTON_TITLE" = "نعم";
@@ -74,6 +73,8 @@
 
 "HIDE_MARKBOOK_BUTTON_OPTION_TITLE" = "إخفاء الإشارات المرجعية";
 "HIDE_MARKBOOK_BUTTON_OPTION_DETAIL_TITLE" = "إزالة زر الإشارة المرجعية.";
+"HIDE_DOWNVOTE_BUTTON_OPTION_TITLE" = "إخفاء التصويت السلبي";
+"HIDE_DOWNVOTE_BUTTON_OPTION_DETAIL_TITLE" = "إزالة زر التصويت السلبي من التغريدات.";
 
 "DISABLE_SENSITIVE_TWEET_WARNINGS_OPTION_TITLE" = "بدون تحذيرات محتوى حساس";
 

@@ -5,7 +5,6 @@
 "RESTART_REQUIRED_ALERT_TITLE" = "Wymagane ponowne uruchomienie";
 "RESTART_REQUIRED_ALERT_MESSAGE" = "Aby zmiana zaczęła działać, musisz ponownie uruchomić Twittera.";
 "RESTART_NOW_BUTTON_TITLE" = "Uruchom ponownie";
-"MODERN_LAYOUT_RESTART_MESSAGE" = "Aby przełączać się między nowym i klasycznym układem, musisz ponownie uruchomić Twittera.";
 
 "RESET_COMPLETE_TITLE" = "Przywracanie zakończone";
 "BACKGROUND_RESET_MESSAGE" = "Tło Wiadomości zostało przywrócone do domyślnego.";
@@ -77,6 +76,8 @@
 
 "HIDE_MARKBOOK_BUTTON_OPTION_TITLE" = "Ukryj zakładki";
 "HIDE_MARKBOOK_BUTTON_OPTION_DETAIL_TITLE" = "Usuń przycisk zakładek z Tweetów.";
+"HIDE_DOWNVOTE_BUTTON_OPTION_TITLE" = "Ukryj głosy negatywne";
+"HIDE_DOWNVOTE_BUTTON_OPTION_DETAIL_TITLE" = "Usuń przycisk głosu negatywnego z Tweetów.";
 
 "DISABLE_SENSITIVE_TWEET_WARNINGS_OPTION_TITLE" = "Bez ostrzeżeń o wrażliwych treściach";
 

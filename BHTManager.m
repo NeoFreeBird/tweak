@@ -6,7 +6,6 @@
 //
 
 #import "BHTManager.h"
-#import "SettingsViewController.h"
 #import "BHTBundle/BHTBundle.h"
 #import "ModernSettingsViewController.h"
 
@@ -60,6 +59,16 @@
     NSNumber *number = [NSNumber numberWithFloat:per];
     return [numberFormatter stringFromNumber:number];
 }
++ (id)sharedFontGroup {
+    id group = [objc_getClass("TFNUIDefaultFontGroup") sharedFontGroup];
+    if (!group) group = [objc_getClass("TAEStandardFontGroup") sharedFontGroup];
+    return group;
+}
++ (UIFont *)menuTitleFont {
+    UIFont *font = [[self sharedFontGroup] headline2BoldFont];
+    if (!font) font = [UIFont boldSystemFontOfSize:17.0];
+    return font;
+}
 + (NSString *)getVideoQuality:(NSString *)url {
     NSMutableArray *q = [NSMutableArray new];
     NSArray *splits = [url componentsSeparatedByString:@"/"];
@@ -85,7 +94,9 @@
     return [NSString stringWithFormat:@"%@x%@", q.firstObject, q.lastObject];
 }
 + (BOOL)isVideoCell:(id <T1StatusViewModel>)model {
-    return model.isMediaEntityVideo || model.isGIF;
+    BOOL isMediaEntityVideo = [model respondsToSelector:@selector(isMediaEntityVideo)] && model.isMediaEntityVideo;
+    BOOL isGIF = [model respondsToSelector:@selector(isGIF)] && model.isGIF;
+    return isMediaEntityVideo || isGIF;
 }
 + (void)save:(NSURL *)url {
     [[PHPhotoLibrary sharedPhotoLibrary] performChangesAndWait:^{
@@ -108,7 +119,7 @@
 }
 + (TFNMenuSheetViewController *)newFFmpegDownloadSheet:(MediaInformation *)mediaInformation downloadingURL:(NSURL *)downloadingURL progressView:(JGProgressHUD *)hud {
     NSAttributedString *AttString = [[NSAttributedString alloc] initWithString:[[BHTBundle sharedBundle] localizedStringForKey:@"DOWNLOAD_MENU_TITLE"] attributes:@{
-        NSFontAttributeName: [[objc_getClass("TAEStandardFontGroup") sharedFontGroup] headline2BoldFont],
+        NSFontAttributeName: [BHTManager menuTitleFont],
         NSForegroundColorAttributeName: UIColor.labelColor
     }];
     TFNActiveTextItem *title = [[objc_getClass("TFNActiveTextItem") alloc] initWithTextModel:[[objc_getClass("TFNAttributedTextModel") alloc] initWithAttributedString:AttString] activeRanges:nil];
@@ -171,7 +182,10 @@
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"hide_topics"];
 }
 + (BOOL)DisableVODCaptions {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"dis_VODCaptions"];
+    // The settings toggle ("No video captions") writes @"video_layer_caption";
+    // this used to read an unexposed @"dis_VODCaptions" key, so the switch did
+    // nothing. Read the key the UI actually sets.
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"video_layer_caption"];
 }
 + (BOOL)UndoTweet {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"undo_tweet"];
@@ -187,6 +201,9 @@
 }
 + (BOOL)OldStyle {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"old_style"];
+}
++ (BOOL)bypassAgeVerification {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"bypass_age_verification"];
 }
 + (BOOL)changeFont {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"en_font"];
@@ -217,6 +234,9 @@
 }
 + (BOOL)alwaysOpenSafari {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"openInBrowser"];
+}
++ (BOOL)replyInWebView {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"reply_in_webview"];
 }
 + (BOOL)hideWhoToFollow {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"hide_who_to_follow"];
@@ -251,14 +271,11 @@
 + (BOOL)noTabBarHiding {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"no_tab_bar_hiding"];
 }
-+ (BOOL)changeBackground {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"change_msg_background"];
-}
-+ (bool)backgroundImage {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"background_image"];
-}
 + (BOOL)hideBookmarkButton {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"hide_bookmark_button"];
+}
++ (BOOL)hideDownvoteButton {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"hide_downvote_button"];
 }
 + (BOOL)customVoice {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"custom_voice_upload"];
@@ -275,6 +292,12 @@
 + (BOOL)disableArticles {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"disableArticles"];
 }
++ (BOOL)hideCustomTimelines {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"hide_custom_timelines"];
+}
++ (BOOL)hideTrends {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"hide_trends"];
+}
 
 + (BOOL)disableHighlights {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"disableHighlights"];
@@ -283,6 +306,23 @@
 // New feature toggles implementation
 + (BOOL)hideGrokAnalyze {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"hide_grok_analyze"];
+}
+
++ (BOOL)restoreTwitterNames {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    if ([defaults objectForKey:@"restore_twitter_names"] == nil) {
+        return [BHTManager isTwitterBranded];
+    }
+    return [defaults boolForKey:@"restore_twitter_names"];
+}
+
++ (BOOL)isTwitterBranded {
+    static BOOL branded = NO;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        branded = [[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"] isEqual:@"Twitter"];
+    });
+    return branded;
 }
 
 + (BOOL)hideFollowButton {
@@ -302,10 +342,6 @@
 
 + (BOOL)restoreVideoTimestamp {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"restore_video_timestamp"];
-}
-
-+ (BOOL)dmAvatars {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"dm_avatars"];
 }
 
 + (BOOL)classicTabBarEnabled {
@@ -342,7 +378,6 @@
 }
 
 + (UIViewController *)BHTSettingsWithAccount:(TFNTwitterAccount *)twAccount {
-    // Always use ModernSettingsViewController now
     return [[ModernSettingsViewController alloc] initWithAccount:twAccount];
 }
 
@@ -363,25 +398,16 @@
     return containsNonDigitsOnly;
 }
 
-+ (BOOL)dmComposeBarV2 {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"dm_compose_bar_v2_enabled"];
-}
-
 + (BOOL)replySorting {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"reply_sorting_enabled"];
-}
-
-+ (BOOL)dmVoiceCreation {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"dm_voice_creation_enabled"];
 }
 
 + (BOOL)restoreReplyContext {
     return [[NSUserDefaults standardUserDefaults] boolForKey:@"restore_reply_context"];
 }
 
-+ (BOOL)disableXChat {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"disable_xchat"];
++ (BOOL)isAttestationBypassEnabled {
+    return [[NSUserDefaults standardUserDefaults] boolForKey:@"attestation_bypass_enabled"];
 }
 
 @end
-

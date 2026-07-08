@@ -12,6 +12,8 @@
 + (NSString *)getDownloadingPersent:(float)per;
 + (void)cleanCache;
 + (NSString *)getVideoQuality:(NSString *)url;
++ (id)sharedFontGroup;
++ (UIFont *)menuTitleFont;
 + (BOOL)isVideoCell:(id <T1StatusViewModel>)model;
 + (bool)isDMVideoCell:(T1InlineMediaView *)view;
 + (BOOL)doesContainDigitsOnly:(NSString *)string;
@@ -34,6 +36,7 @@
 + (BOOL)DisableVODCaptions;
 + (BOOL)Padlock;
 + (BOOL)OldStyle;
++ (BOOL)bypassAgeVerification;
 + (BOOL)changeFont;
 + (BOOL)FLEX;
 + (BOOL)autoHighestLoad;
@@ -44,6 +47,7 @@
 + (BOOL)hideSpacesBar;
 + (BOOL)disableRTL;
 + (BOOL)alwaysOpenSafari;
++ (BOOL)replyInWebView;
 + (BOOL)hideWhoToFollow;
 + (BOOL)hideTopicsToFollow;
 + (BOOL)hideBlueVerified;
@@ -54,21 +58,23 @@
 + (BOOL)stripTrackingParams;
 + (BOOL)alwaysFollowingPage;
 + (BOOL)stopHidingTabBar;
-+ (BOOL)changeBackground;
-+ (bool)backgroundImage;
 + (BOOL)hideBookmarkButton;
++ (BOOL)hideDownvoteButton;
 + (BOOL)customVoice;
 + (BOOL)RestoreTweetLabels;
 + (BOOL)disableMediaTab;
 + (BOOL)disableArticles;
++ (BOOL)hideCustomTimelines;
++ (BOOL)hideTrends;
 + (BOOL)disableHighlights;
 
 + (BOOL)hideGrokAnalyze;
++ (BOOL)restoreTwitterNames;
++ (BOOL)isTwitterBranded;
 + (BOOL)hideFollowButton;
 + (BOOL)restoreFollowButton;
 + (BOOL)squareAvatars;
 + (BOOL)restoreVideoTimestamp;
-+ (BOOL)dmAvatars;
 + (BOOL)classicTabBarEnabled;
 + (BOOL)restoreTabLabels;
 + (BOOL)noTabBarHiding;
@@ -79,14 +85,12 @@
 + (NSString *)translateAPIKey;
 + (NSString *)translateModel;
 
-+ (BOOL)dmComposeBarV2;
 + (BOOL)replySorting;
-+ (BOOL)dmVoiceCreation;
 
 + (void)clearSourceLabelCache;
 
 + (BOOL)restoreReplyContext;
-+ (BOOL)disableXChat;
+
++ (BOOL)isAttestationBypassEnabled;
 
 @end
-

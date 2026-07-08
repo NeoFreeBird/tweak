@@ -4,4 +4,8 @@
 classdump/
 autopush.sh
 *.ipa
-packages/stuff/*
+packages/
+!packages/PUT_IPA_HERE
+
+*.md
+!README.md

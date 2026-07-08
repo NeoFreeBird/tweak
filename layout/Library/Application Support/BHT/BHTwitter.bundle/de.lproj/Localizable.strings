@@ -10,7 +10,6 @@
 "RESTART_REQUIRED_ALERT_TITLE" = "Neustart erforderlich";
 "RESTART_REQUIRED_ALERT_MESSAGE" = "Twitter muss neu gestartet werden, damit diese Änderung wirksam wird.";
 "RESTART_NOW_BUTTON_TITLE" = "Jetzt neu starten";
-"MODERN_LAYOUT_RESTART_MESSAGE" = "Um zwischen modernem und klassischem Layout zu wechseln, muss Twitter neu gestartet werden.";
 
 "CONFIRM_ALERT_MESSAGE" = "Bist du dir sicher, dass du das tun wolltest?";
 "YES_BUTTON_TITLE" = "Ja";
@@ -73,6 +72,8 @@
 
 "HIDE_MARKBOOK_BUTTON_OPTION_TITLE" = "Lesezeichen ausblenden";
 "HIDE_MARKBOOK_BUTTON_OPTION_DETAIL_TITLE" = "Entferne den Lesezeichen-Button aus Tweets.";
+"HIDE_DOWNVOTE_BUTTON_OPTION_TITLE" = "Downvotes ausblenden";
+"HIDE_DOWNVOTE_BUTTON_OPTION_DETAIL_TITLE" = "Entferne den Downvote-Button aus Tweets.";
 
 "DISABLE_SENSITIVE_TWEET_WARNINGS_OPTION_TITLE" = "Keine Warnungen wegen sensibler Inhalte";
 

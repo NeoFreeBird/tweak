@@ -20,14 +20,26 @@
 #import "BHDimPalette.h"
 #import <math.h>
 #import "BHTBundle/BHTBundle.h"
+#import "LegacyLogin/BHTLegacyLoginViewController.h"
 #import "TWHeaders.h"
 #import "SAMKeychain/SAMKeychain.h"
 #import "CustomTabBar/BHCustomTabBarUtility.h"
 #import <Preferences/PSListController.h>
 #import <Preferences/PSSpecifier.h>
 #import "ModernSettingsViewController.h"
+#import "BHDownloadInlineButton.h"
 
 @class T1SettingsViewController;
+
+@interface DCAppAttestService : NSObject
++ (instancetype)sharedService;
+- (BOOL)isSupported;
+@end
+
+@interface ASWebAuthenticationSession : NSObject
+- (instancetype)initWithURL:(NSURL *)URL callbackURLScheme:(NSString *)callbackURLScheme completionHandler:(void(^)(NSURL *, NSError *))completionHandler;
+@property(nonatomic) BOOL prefersEphemeralWebBrowserSession;
+@end
 
 // Forward declarations
 static void BHT_UpdateAllTabBarIcons(void);
@@ -460,6 +472,11 @@ static void batchSwizzlingOnClass(Class cls, NSArray<NSString*>*origSelectors, I
 %end
 
 // MARK: App Delegate hooks
+
+// Defined with the native CreateTweet -> web rewrite section further down.
+static void BHT_prewarmWebCookiesIfNeeded(void);
+static void BHT_maybeHandleHarvestWebView(__unsafe_unretained id webViewController);
+
 %hook T1AppDelegate
 - (_Bool)application:(UIApplication *)application didFinishLaunchingWithOptions:(id)arg2 {
     _Bool orig = %orig;
@@ -472,6 +489,7 @@ static void batchSwizzlingOnClass(Class cls, NSArray<NSString*>*origSelectors, I
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"voice"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"undo_tweet"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"TrustedFriends"];
+        [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"bypass_age_verification"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"disableSensitiveTweetWarnings"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"disable_immersive_player"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"custom_voice_upload"];
@@ -482,12 +500,11 @@ static void batchSwizzlingOnClass(Class cls, NSArray<NSString*>*origSelectors, I
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"hide_view_count"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"hide_grok_analyze"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"restore_reply_context"];
-        [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"disable_xchat"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"hide_topics"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"hide_topics_to_follow"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"hide_who_to_follow"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"no_tab_bar_hiding"];
-
+        [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"attestation_bypass_enabled"];
     }
     [BHTManager cleanCache];
     if ([BHTManager FLEX]) {
@@ -524,6 +541,8 @@ static void batchSwizzlingOnClass(Class cls, NSArray<NSString*>*origSelectors, I
             [TweetSourceHelper initializeCookiesWithRetry];
         });
     }
+
+    BHT_prewarmWebCookiesIfNeeded();
 
     if ([BHTManager Padlock]) {
         if (BHT_isAuthenticated()) {
@@ -620,35 +639,11 @@ static void batchSwizzlingOnClass(Class cls, NSArray<NSString*>*origSelectors, I
 - (void)loadView {
     %orig;
     NSArray <NSString *> *hiddenBars = [BHCustomTabBarUtility getHiddenTabBars];
+    BOOL hideGrokByDefault = ![[NSUserDefaults standardUserDefaults] boolForKey:@"ios_tab_bar_default_show_grok"];
     for (T1TabView *tabView in self.tabViews) {
-        if ([hiddenBars containsObject:tabView.scribePage]) {
+        if ([hiddenBars containsObject:tabView.scribePage] ||
+            (hideGrokByDefault && [tabView.scribePage isEqualToString:@"grok"])) {
             [tabView setHidden:true];
-        }
-    }
-}
-%end
-
-%hook T1DirectMessageConversationEntriesViewController
-- (void)viewDidLoad {
-    %orig;
-    if ([BHTManager changeBackground]) {
-        if ([BHTManager backgroundImage]) { // set the backgeound as image
-            NSFileManager *manager = [NSFileManager defaultManager];
-            NSString *DocPath = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, true).firstObject;
-            NSURL *imagePath = [[NSURL fileURLWithPath:DocPath] URLByAppendingPathComponent:@"msg_background.png"];
-
-            if ([manager fileExistsAtPath:imagePath.path]) {
-                UIImageView *backgroundImage = [[UIImageView alloc] initWithFrame:UIScreen.mainScreen.bounds];
-                backgroundImage.image = [UIImage imageNamed:imagePath.path];
-                [backgroundImage setContentMode:UIViewContentModeScaleAspectFill];
-                [self.view insertSubview:backgroundImage atIndex:0];
-            }
-        }
-
-        if ([[NSUserDefaults standardUserDefaults] objectForKey:@"background_color"]) { // set the backgeound as color
-            NSString *hexCode = [[NSUserDefaults standardUserDefaults] objectForKey:@"background_color"];
-            UIColor *selectedColor = [UIColor colorFromHexString:hexCode];
-            self.view.backgroundColor = selectedColor;
         }
     }
 }
@@ -690,8 +685,10 @@ typedef NS_ENUM(NSInteger, BHTTwitterThemeVariant) {
 static BHTTwitterThemeVariant BHTCurrentTwitterThemeVariant(T1ProfileHeaderView *headerView) {
     UIUserInterfaceStyle style = UIUserInterfaceStyleLight;
 
-    if (headerView && @available(iOS 13.0, *)) {
-        style = headerView.traitCollection.userInterfaceStyle;
+    if (headerView) {
+        if (@available(iOS 13.0, *)) {
+            style = headerView.traitCollection.userInterfaceStyle;
+        }
     }
 
     // System / Twitter light theme
@@ -1256,7 +1253,7 @@ static void BHTApplyCopyButtonStyle(UIButton *copyButton, T1ProfileHeaderView *h
 }
 %new - (void)DownloadHandler {
     NSAttributedString *AttString = [[NSAttributedString alloc] initWithString:[[BHTBundle sharedBundle] localizedStringForKey:@"DOWNLOAD_MENU_TITLE"] attributes:@{
-        NSFontAttributeName: [[%c(TAEStandardFontGroup) sharedFontGroup] headline2BoldFont],
+        NSFontAttributeName: [BHTManager menuTitleFont],
         NSForegroundColorAttributeName: UIColor.labelColor
     }];
     TFNActiveTextItem *title = [[%c(TFNActiveTextItem) alloc] initWithTextModel:[[%c(TFNAttributedTextModel) alloc] initWithAttributedString:AttString] activeRanges:nil];
@@ -1393,6 +1390,1162 @@ static void BHTApplyCopyButtonStyle(UIButton *copyButton, T1ProfileHeaderView *h
 }
 %end
 
+// MARK: Open reply in webview
+
+static id BHT_accountForAuthenticatedWebView(void) {
+    Class hostClass = %c(T1HostViewController);
+    if ([hostClass respondsToSelector:@selector(sharedHostViewController)]) {
+        id host = [hostClass sharedHostViewController];
+        if ([host respondsToSelector:@selector(currentAccount)]) {
+            id account = [host currentAccount];
+            if (account) {
+                return account;
+            }
+        }
+    }
+
+    return nil;
+}
+
+static TFNTwitterStatus *BHT_statusFromObject(id object) {
+    if (!object) {
+        return nil;
+    }
+
+    if ([object isKindOfClass:%c(TFNTwitterStatus)]) {
+        return (TFNTwitterStatus *)object;
+    }
+
+    @try {
+        id tweet = [object valueForKey:@"tweet"];
+        if ([tweet isKindOfClass:%c(TFNTwitterStatus)]) {
+            return (TFNTwitterStatus *)tweet;
+        }
+    } @catch (__unused NSException *exception) {}
+
+    @try {
+        id status = [object valueForKey:@"status"];
+        if ([status isKindOfClass:%c(TFNTwitterStatus)]) {
+            return (TFNTwitterStatus *)status;
+        }
+    } @catch (__unused NSException *exception) {}
+
+    return nil;
+}
+
+static TFNTwitterStatus *BHT_statusFromTweetView(T1StatusCell *tweetView) {
+    @try {
+        return BHT_statusFromObject([tweetView valueForKey:@"viewModel"]);
+    } @catch (__unused NSException *exception) {}
+
+    return nil;
+}
+
+static const void *BHTKeepReplyInWebViewKey = &BHTKeepReplyInWebViewKey;
+static const void *BHTReplyWebViewDismissingKey = &BHTReplyWebViewDismissingKey;
+
+// Injected into the reply webview via -evaluateJavaScript
+// Grabs the ID of the new post
+static NSString *const BHTReplyCaptureScript =
+    @"(function(){"
+    "if(window.__bhtReplyHook)return;window.__bhtReplyHook=true;"
+    "var save=function(j){try{if(j&&j.data){"
+    "var r=(j.data.create_tweet&&j.data.create_tweet.tweet_results&&j.data.create_tweet.tweet_results.result)||"
+    "(j.data.notetweet_create&&j.data.notetweet_create.tweet_results&&j.data.notetweet_create.tweet_results.result);"
+    "if(r&&r.rest_id)sessionStorage.setItem('__bhtNewReply',String(r.rest_id));}}catch(e){}};"
+    "var isCreate=function(u){return typeof u==='string'&&u.indexOf('CreateTweet')!==-1;};"
+    "var of=window.fetch;"
+    "if(of){window.fetch=function(){var a=arguments;var u=(a[0]&&a[0].url)||a[0];"
+    "return of.apply(this,a).then(function(res){try{if(isCreate(u))res.clone().json().then(save).catch(function(){});}catch(e){}return res;});};}"
+    "var oo=XMLHttpRequest.prototype.open;var os=XMLHttpRequest.prototype.send;"
+    "XMLHttpRequest.prototype.open=function(m,u){this.__bhtURL=u;return oo.apply(this,arguments);};"
+    "XMLHttpRequest.prototype.send=function(){var x=this;try{if(isCreate(x.__bhtURL)){"
+    "x.addEventListener('load',function(){try{save(JSON.parse(x.responseText));}catch(e){}});}}catch(e){}return os.apply(this,arguments);};"
+    "})();";
+
+static NSString *const BHTReplyReadScript =
+    @"(function(){var v=sessionStorage.getItem('__bhtNewReply')||'';sessionStorage.removeItem('__bhtNewReply');return v;})();";
+
+static void BHT_openStatusNatively(NSString *statusID) {
+    if (statusID.length == 0) {
+        return;
+    }
+
+    NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"twitter://status?id=%@", statusID]];
+    if (!url) {
+        return;
+    }
+
+    id delegate = [UIApplication sharedApplication].delegate;
+    if ([delegate respondsToSelector:@selector(openURL:options:)]) {
+        ((void (*)(id, SEL, id, id))objc_msgSend)(delegate, @selector(openURL:options:), url, @{});
+    }
+}
+
+static void BHT_showPostSentAlert(NSString *statusID) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIViewController *top = topMostController();
+        if (!top) {
+            return;
+        }
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Post sent"
+                                                                      message:nil
+                                                               preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"Open" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            BHT_openStatusNatively(statusID);
+        }]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"Dismiss" style:UIAlertActionStyleCancel handler:nil]];
+        [top presentViewController:alert animated:YES completion:nil];
+    });
+}
+
+static BOOL BHT_openAuthenticatedTweetWebView(NSString *statusID) {
+    if (statusID.length == 0) {
+        return NO;
+    }
+
+    NSString *urlString = [NSString stringWithFormat:@"https://x.com/intent/tweet?in_reply_to=%@", statusID];
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (!url) {
+        return NO;
+    }
+
+    Class webViewControllerClass = %c(T1WebViewController);
+    SEL initSel = @selector(initWithRootURL:account:shouldAuthenticate:shouldPresentAsNativePage:sourceStatus:scribeComponent:scribeParameters:);
+    if (!webViewControllerClass || ![webViewControllerClass instancesRespondToSelector:initSel]) {
+        return NO;
+    }
+
+    id account = BHT_accountForAuthenticatedWebView();
+    if (!account) {
+        return NO;
+    }
+
+    UIViewController *presentingController = topMostController();
+    if (!presentingController) {
+        return NO;
+    }
+
+    T1WebViewController *webViewController =
+        [[webViewControllerClass alloc] initWithRootURL:url
+                                                account:account
+                                     shouldAuthenticate:YES
+                              shouldPresentAsNativePage:NO
+                                           sourceStatus:nil
+                                        scribeComponent:nil
+                                       scribeParameters:nil];
+    if (!webViewController) {
+        return NO;
+    }
+
+    // Mark this instance so our -doesURLResultTypeOpenInWebview: and -setCurrentURL:
+    // hooks know to keep the reply in-webview and auto-close it on /home.
+    objc_setAssociatedObject(webViewController, BHTKeepReplyInWebViewKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    Class navigationControllerClass = NSClassFromString(@"T1WebNavigationController")
+        ?: %c(TFNNavigationController)
+        ?: UINavigationController.class;
+    UINavigationController *modalNavigationController = [[navigationControllerClass alloc] initWithRootViewController:webViewController];
+
+    [presentingController presentViewController:modalNavigationController animated:YES completion:nil];
+
+    return YES;
+}
+
+static T1StatusCell *BHT_tweetViewFromInlineActionsView(TTAStatusInlineActionsView *actionsView) {
+    if ([actionsView.superview isKindOfClass:%c(T1StandardStatusView)]) {
+        return (T1StatusCell *)[(T1StandardStatusView *)actionsView.superview eventHandler];
+    }
+
+    if ([actionsView.superview isKindOfClass:%c(T1TweetDetailsFocalStatusView)]) {
+        return (T1StatusCell *)[(T1TweetDetailsFocalStatusView *)actionsView.superview eventHandler];
+    }
+
+    if ([actionsView.superview isKindOfClass:%c(T1ConversationFocalStatusView)]) {
+        return (T1StatusCell *)[(T1ConversationFocalStatusView *)actionsView.superview eventHandler];
+    }
+
+    return nil;
+}
+
+%hook TTAStatusInlineReplyButton
+- (void)didTap {
+    if (![BHTManager replyInWebView]) {
+        return %orig;
+    }
+
+    id delegate = self.delegate;
+    if (![delegate isKindOfClass:%c(TTAStatusInlineActionsView)]) {
+        return %orig;
+    }
+
+    TTAStatusInlineActionsView *actionsView = (TTAStatusInlineActionsView *)delegate;
+    TFNTwitterStatus *status = BHT_statusFromTweetView(BHT_tweetViewFromInlineActionsView(actionsView));
+    if (!status) {
+        status = BHT_statusFromObject(actionsView.viewModel);
+    }
+
+    NSInteger statusID = status.statusID;
+    if (statusID <= 0) {
+        return %orig;
+    }
+
+    NSString *statusIDString = @(statusID).stringValue;
+    if (!BHT_openAuthenticatedTweetWebView(statusIDString)) {
+        return %orig;
+    }
+}
+%end
+
+%hook T1PersistentComposeViewController
+- (void)persistentComposeViewDidTap:(id)composeView {
+    if (![BHTManager replyInWebView]) {
+        return %orig;
+    }
+
+    TFNTwitterStatus *status = BHT_statusFromObject(self.statusViewModel);
+    NSInteger statusID = status.statusID;
+    if (statusID <= 0) {
+        return %orig;
+    }
+
+    NSString *statusIDString = @(statusID).stringValue;
+    if (!BHT_openAuthenticatedTweetWebView(statusIDString)) {
+        return %orig;
+    }
+}
+%end
+
+%hook T1WebViewController
+- (void)didFinishLoadingWithError:(id)error {
+    %orig;
+
+    BHT_maybeHandleHarvestWebView(self);
+
+    if (!objc_getAssociatedObject(self, BHTKeepReplyInWebViewKey)) {
+        return;
+    }
+
+    WKWebView *webView = [self webView];
+    if ([webView isKindOfClass:%c(WKWebView)]) {
+        [webView evaluateJavaScript:BHTReplyCaptureScript completionHandler:nil];
+    }
+}
+
+- (BOOL)doesURLResultTypeOpenInWebview:(long long)resultType {
+    if (objc_getAssociatedObject(self, BHTKeepReplyInWebViewKey)) {
+        return YES;
+    }
+    return %orig;
+}
+
+- (void)setCurrentURL:(NSURL *)url {
+    %orig;
+
+    if (!objc_getAssociatedObject(self, BHTKeepReplyInWebViewKey) || ![url.path isEqualToString:@"/home"]) {
+        return;
+    }
+
+    // setCurrentURL: can fire more than once for the same navigation; only act once.
+    if (objc_getAssociatedObject(self, BHTReplyWebViewDismissingKey)) {
+        return;
+    }
+    objc_setAssociatedObject(self, BHTReplyWebViewDismissingKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    __weak T1WebViewController *weakSelf = self;
+
+    void (^finish)(NSString *) = ^(NSString *newReplyID) {
+        [weakSelf dismissViewControllerAnimated:YES completion:^{
+            if (newReplyID.length > 0) {
+                BHT_showPostSentAlert(newReplyID);
+            }
+        }];
+    };
+
+    WKWebView *webView = [self webView];
+    if ([webView isKindOfClass:%c(WKWebView)]) {
+        [webView evaluateJavaScript:BHTReplyReadScript completionHandler:^(id result, NSError *jsError) {
+            NSString *newReplyID = [result isKindOfClass:[NSString class]] ? (NSString *)result : nil;
+            finish(newReplyID);
+        }];
+    } else {
+        finish(nil);
+    }
+}
+%end
+
+// MARK: Web authentication for tweeting
+
+static NSString *const BHTWebBearer =
+    @"Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA";
+static NSString *const BHTWebQueryIDDefaultsKey = @"nfb_createtweet_queryid";
+static NSString *BHTWebCreateTweetQueryID = @"vwzfnq1lLOa1Nfx7htM2mw";
+
+static NSString *BHTWebCT0 = nil;
+static NSString *BHTWebAuthToken = nil;
+static NSString *BHTWebTwid = nil;
+static NSString *BHTWebAuthMulti = nil;
+
+static NSMutableDictionary<NSString *, NSDictionary *> *BHTWebAccountCookies = nil;
+static const void *BHTWebPostingUIDKey = &BHTWebPostingUIDKey;
+static const void *BHTCreateTweetWatcherKey = &BHTCreateTweetWatcherKey;
+
+static dispatch_queue_t BHT_accountCacheQueue(void) {
+    static dispatch_queue_t queue;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        queue = dispatch_queue_create("com.nfb.webaccountcache", DISPATCH_QUEUE_SERIAL);
+    });
+    return queue;
+}
+
+static NSDictionary *BHT_cachedPair(NSString *userID) {
+    if (userID.length == 0) {
+        return nil;
+    }
+    __block NSDictionary *pair = nil;
+    dispatch_sync(BHT_accountCacheQueue(), ^{
+        pair = BHTWebAccountCookies[userID];
+    });
+    return pair;
+}
+
+static void BHT_setCachedPair(NSString *userID, NSDictionary *pair) {
+    if (userID.length == 0) {
+        return;
+    }
+    dispatch_sync(BHT_accountCacheQueue(), ^{
+        if (!BHTWebAccountCookies) {
+            BHTWebAccountCookies = [NSMutableDictionary dictionary];
+        }
+        if (pair) {
+            BHTWebAccountCookies[userID] = pair;
+        } else {
+            [BHTWebAccountCookies removeObjectForKey:userID];
+        }
+    });
+}
+static BOOL BHTWebCookieHarvestInFlight = NO;
+static UIWindow *BHTWebHarvestWindow = nil;
+static BOOL BHTWebBootstrapInFlight = NO;
+
+// The authenticated web helper webview is kept alive so we can generate a fresh
+// x-client-transaction-id per send to avoid rate limiting
+static WKWebView *BHTWebHelperWebView = nil;
+static BOOL BHTWebHelperReady = NO;
+static NSString *BHTWebXTID = nil;
+static BOOL BHTWebXTIDInFlight = NO;
+
+static const void *BHTWebHarvestWebViewKey = &BHTWebHarvestWebViewKey;
+
+static void BHT_teardownWebHarvestWindow(void);
+static void BHT_refreshXTID(void);
+static void BHT_refreshWebCookiesViaWebView(void);
+
+@interface WKWebView (BHTAsyncJavaScript)
+- (void)callAsyncJavaScript:(NSString *)functionBody
+                  arguments:(NSDictionary<NSString *, id> *)arguments
+                    inFrame:(WKFrameInfo *)frame
+             inContentWorld:(WKContentWorld *)contentWorld
+          completionHandler:(void (^)(id result, NSError *error))completionHandler;
+@end
+
+static BOOL BHT_nativeCreateTweetInterceptEnabled(void) {
+    return ![BHTManager replyInWebView];
+}
+
+#pragma mark - Web session cookie harvesting
+
+static void BHT_storeWebCookies(NSArray<NSHTTPCookie *> *cookies) {
+    if (![cookies isKindOfClass:[NSArray class]]) {
+        return;
+    }
+    for (NSHTTPCookie *cookie in cookies) {
+        NSString *domain = cookie.domain ?: @"";
+        if (![domain containsString:@"x.com"] && ![domain containsString:@"twitter.com"]) {
+            continue;
+        }
+        if ([cookie.name isEqualToString:@"ct0"] && cookie.value.length) {
+            BHTWebCT0 = [cookie.value copy];
+        } else if ([cookie.name isEqualToString:@"auth_token"] && cookie.value.length) {
+            BHTWebAuthToken = [cookie.value copy];
+        } else if ([cookie.name isEqualToString:@"twid"] && cookie.value.length) {
+            BHTWebTwid = [cookie.value copy];
+        } else if ([cookie.name isEqualToString:@"auth_multi"] && cookie.value.length) {
+            BHTWebAuthMulti = [cookie.value copy];
+        }
+    }
+
+    NSString *liveUserID = nil;
+    if (BHTWebTwid.length) {
+        NSString *decoded = [BHTWebTwid stringByRemovingPercentEncoding] ?: BHTWebTwid;
+        NSRange eq = [decoded rangeOfString:@"="];
+        NSString *idPart = eq.location != NSNotFound ? [decoded substringFromIndex:NSMaxRange(eq)] : decoded;
+        NSCharacterSet *nonDigits = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
+        NSString *digits = [[idPart componentsSeparatedByCharactersInSet:nonDigits] componentsJoinedByString:@""];
+        liveUserID = digits.length ? digits : nil;
+    }
+    if (liveUserID.length && BHTWebAuthToken.length && BHTWebCT0.length) {
+        BHT_setCachedPair(liveUserID, @{
+            @"auth_token": BHTWebAuthToken,
+            @"ct0": BHTWebCT0,
+            @"twid": BHTWebTwid,
+        });
+    }
+}
+
+static void BHT_harvestWebCookiesFromSharedStorage(void) {
+    NSMutableArray<NSHTTPCookie *> *all = [NSMutableArray array];
+    for (NSString *domain in @[@"https://api.twitter.com", @"https://twitter.com", @"https://x.com"]) {
+        NSArray *cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookiesForURL:[NSURL URLWithString:domain]];
+        if (cookies) {
+            [all addObjectsFromArray:cookies];
+        }
+    }
+    BHT_storeWebCookies(all);
+}
+
+static void BHT_onHelperWebViewLoaded(WKWebView *webView);
+
+@interface BHTWebHelperDelegate : NSObject <WKNavigationDelegate>
+@end
+@implementation BHTWebHelperDelegate
+- (void)webView:(WKWebView *)webView didFinishNavigation:(__unused WKNavigation *)navigation {
+    BHT_onHelperWebViewLoaded(webView);
+}
+- (void)webView:(__unused WKWebView *)webView didFailProvisionalNavigation:(__unused WKNavigation *)navigation withError:(__unused NSError *)error {
+    BHTWebHelperWebView = nil;
+    BHTWebHelperReady = NO;
+    BHTWebCookieHarvestInFlight = NO;
+}
+@end
+
+static BHTWebHelperDelegate *BHTWebHelperDelegateInstance = nil;
+
+// Seed the helper webview's cookie store with the harvested web-session cookies so it
+// loads authenticated
+static void BHT_seedHelperCookies(WKWebView *webView, void (^done)(void)) {
+    if (@available(iOS 11.0, *)) {
+        NSMutableArray<NSHTTPCookie *> *cookies = [NSMutableArray array];
+        NSDictionary *pairs = @{ @"auth_token": BHTWebAuthToken ?: @"",
+                                 @"ct0": BHTWebCT0 ?: @"",
+                                 @"twid": BHTWebTwid ?: @"" };
+        for (NSString *name in pairs) {
+            NSString *value = pairs[name];
+            if (value.length == 0) continue;
+            NSHTTPCookie *cookie = [NSHTTPCookie cookieWithProperties:@{
+                NSHTTPCookieName: name,
+                NSHTTPCookieValue: value,
+                NSHTTPCookieDomain: @".x.com",
+                NSHTTPCookiePath: @"/",
+            }];
+            if (cookie) [cookies addObject:cookie];
+        }
+        if (cookies.count == 0) {
+            done();
+            return;
+        }
+        WKHTTPCookieStore *store = webView.configuration.websiteDataStore.httpCookieStore;
+        __block NSUInteger remaining = cookies.count;
+        for (NSHTTPCookie *cookie in cookies) {
+            [store setCookie:cookie completionHandler:^{
+                if (--remaining == 0) done();
+            }];
+        }
+    } else {
+        done();
+    }
+}
+
+// Stand up an offscreen raw WKWebView on x.com
+static void BHT_refreshWebCookiesViaWebView(void) {
+    if (BHTWebHelperWebView) {
+        BHT_refreshXTID();
+        return;
+    }
+    if (BHTWebCookieHarvestInFlight) {
+        return;
+    }
+    BHTWebCookieHarvestInFlight = YES;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        BHT_harvestWebCookiesFromSharedStorage();
+
+        WKWebViewConfiguration *configuration = [[WKWebViewConfiguration alloc] init];
+        configuration.allowsInlineMediaPlayback = YES;
+        configuration.allowsPictureInPictureMediaPlayback = NO;
+        configuration.mediaTypesRequiringUserActionForPlayback = WKAudiovisualMediaTypeAll;
+        WKWebView *webView = [[WKWebView alloc] initWithFrame:CGRectMake(0, 0, 390, 844)
+                                                configuration:configuration];
+        BHTWebHelperDelegateInstance = [[BHTWebHelperDelegate alloc] init];
+        webView.navigationDelegate = BHTWebHelperDelegateInstance;
+        webView.customUserAgent = @"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+        webView.userInteractionEnabled = NO;
+        BHTWebHelperWebView = webView;
+        BHTWebHelperReady = NO;
+
+        UIWindow *keyWindow = nil;
+        for (UIWindow *w in [UIApplication sharedApplication].windows) {
+            if (w.isKeyWindow) { keyWindow = w; break; }
+        }
+        if (!keyWindow) {
+            keyWindow = [UIApplication sharedApplication].windows.firstObject;
+        }
+        if (keyWindow) {
+            webView.frame = CGRectMake(-3000, -3000, 390, 844);
+            webView.alpha = 0.01;
+            [keyWindow addSubview:webView];
+        }
+
+        BHT_seedHelperCookies(webView, ^{
+            [webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:@"https://x.com/settings/account"]]];
+        });
+    });
+}
+
+static void BHT_onHelperWebViewLoaded(WKWebView *webView) {
+    BHTWebCookieHarvestInFlight = NO;
+
+    [webView.configuration.websiteDataStore.httpCookieStore getAllCookies:^(NSArray<NSHTTPCookie *> *cookies) {
+        BHT_storeWebCookies(cookies);
+    }];
+
+    NSString *script = nil;
+    NSURL *scriptURL = [[BHTBundle sharedBundle] pathForFile:@"BHTWebXTID.js"];
+    if (scriptURL) {
+        script = [NSString stringWithContentsOfURL:scriptURL encoding:NSUTF8StringEncoding error:nil];
+    }
+    if (script.length) {
+        [webView evaluateJavaScript:script completionHandler:^(__unused id result, __unused NSError *error) {
+            BHTWebHelperReady = YES;
+            BHT_refreshXTID();
+        }];
+    }
+}
+
+static void BHT_teardownWebHarvestWindow(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (BHTWebHarvestWindow) {
+            BHTWebHarvestWindow.hidden = YES;
+            BHTWebHarvestWindow.rootViewController = nil;
+            BHTWebHarvestWindow = nil;
+        }
+        BHTWebBootstrapInFlight = NO;
+    });
+}
+
+static UIWindowScene *BHT_activeWindowScene(void) {
+    if (@available(iOS 13.0, *)) {
+        UIWindowScene *fallback = nil;
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if (![scene isKindOfClass:[UIWindowScene class]]) {
+                continue;
+            }
+            if (scene.activationState == UISceneActivationStateForegroundActive) {
+                return (UIWindowScene *)scene;
+            }
+            if (!fallback) {
+                fallback = (UIWindowScene *)scene;
+            }
+        }
+        return fallback;
+    }
+    return nil;
+}
+
+static NSString *BHT_userIDStringForAccount(id account) {
+    if (!account || ![account respondsToSelector:@selector(userID)]) {
+        return nil;
+    }
+    long long uid = ((long long (*)(id, SEL))objc_msgSend)(account, @selector(userID));
+    return uid ? [@(uid) stringValue] : nil;
+}
+
+static id BHT_accountForUserID(NSString *userID) {
+    if (userID.length == 0) {
+        return nil;
+    }
+    @try {
+        Class twitterClass = %c(TFNTwitter);
+        if (![twitterClass respondsToSelector:@selector(sharedTwitter)]) {
+            return nil;
+        }
+        id twitter = ((id (*)(id, SEL))objc_msgSend)((id)twitterClass, @selector(sharedTwitter));
+        if (![twitter respondsToSelector:@selector(accounts)]) {
+            return nil;
+        }
+        NSArray *accounts = ((id (*)(id, SEL))objc_msgSend)(twitter, @selector(accounts));
+        for (id account in accounts) {
+            if ([BHT_userIDStringForAccount(account) isEqualToString:userID]) {
+                return account;
+            }
+        }
+    } @catch (__unused NSException *exception) {}
+    return nil;
+}
+
+static void BHT_bootstrapAccount(id account, NSString *userID) {
+    if (!account || userID.length == 0) {
+        return;
+    }
+
+    if (BHTWebBootstrapInFlight) {
+        return;
+    }
+
+    BHTWebBootstrapInFlight = YES;
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (BHTWebHarvestWindow) {
+            BHTWebHarvestWindow.hidden = YES;
+            BHTWebHarvestWindow.rootViewController = nil;
+            BHTWebHarvestWindow = nil;
+        }
+
+        Class webViewControllerClass = %c(T1WebViewController);
+        SEL initSel = @selector(initWithRootURL:account:shouldAuthenticate:shouldPresentAsNativePage:sourceStatus:scribeComponent:scribeParameters:);
+        UIWindowScene *scene = BHT_activeWindowScene();
+        if (!webViewControllerClass || !scene ||
+            ![webViewControllerClass instancesRespondToSelector:initSel]) {
+            BHTWebBootstrapInFlight = NO;
+            return;
+        }
+
+        NSURL *url = [NSURL URLWithString:@"https://x.com/settings/account"];
+        T1WebViewController *webViewController =
+            [[webViewControllerClass alloc] initWithRootURL:url
+                                                    account:account
+                                         shouldAuthenticate:YES
+                                  shouldPresentAsNativePage:NO
+                                               sourceStatus:nil
+                                            scribeComponent:nil
+                                           scribeParameters:nil];
+        if (!webViewController) {
+            BHTWebBootstrapInFlight = NO;
+            return;
+        }
+
+        objc_setAssociatedObject(webViewController, BHTWebHarvestWebViewKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+        UIWindow *window = [[UIWindow alloc] initWithWindowScene:scene];
+        window.frame = CGRectMake(-3000, -3000, 390, 844);
+        window.windowLevel = UIWindowLevelNormal - 1000;
+        window.userInteractionEnabled = NO;
+        window.rootViewController = webViewController;
+        window.hidden = NO;
+        BHTWebHarvestWindow = window;
+
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(25 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            BHT_teardownWebHarvestWindow();
+        });
+    });
+}
+
+static void BHT_refreshXTID(void) {
+    if (BHTWebXTIDInFlight) {
+        return;
+    }
+    WKWebView *webView = BHTWebHelperWebView;
+    if (![webView isKindOfClass:[WKWebView class]]) {
+        return;
+    }
+    if (@available(iOS 14.0, *)) {
+        BHTWebXTIDInFlight = YES;
+        NSString *path = [NSString stringWithFormat:@"/graphql/%@/CreateTweet", BHTWebCreateTweetQueryID];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [webView callAsyncJavaScript:@"return await window.__bhtTransactionId(path, method);"
+                               arguments:@{ @"method": @"POST", @"path": path }
+                             inFrame:nil
+                          inContentWorld:WKContentWorld.pageWorld
+                       completionHandler:^(id result, NSError *error) {
+                BHTWebXTIDInFlight = NO;
+                BOOL ok = [result isKindOfClass:[NSString class]] &&
+                          [(NSString *)result length] > 10 &&
+                          ![(NSString *)result hasPrefix:@"BHTERR:"];
+                if (ok) {
+                    BHTWebXTID = [result copy];
+                }
+            }];
+        });
+    }
+}
+
+static void BHT_prewarmWebCookiesIfNeeded(void) {
+    if (!BHT_nativeCreateTweetInterceptEnabled()) {
+        return;
+    }
+
+    NSString *savedQueryID = [[NSUserDefaults standardUserDefaults] stringForKey:BHTWebQueryIDDefaultsKey];
+    if (savedQueryID.length) {
+        BHTWebCreateTweetQueryID = [savedQueryID copy];
+    }
+
+    if (BHTWebHelperWebView) {
+        BHT_refreshXTID();
+    } else {
+        BHT_refreshWebCookiesViaWebView();
+    }
+
+    BHT_harvestWebCookiesFromSharedStorage();
+
+    id current = BHT_accountForAuthenticatedWebView();
+    NSString *currentUserID = BHT_userIDStringForAccount(current);
+    if (current && currentUserID.length && !BHT_cachedPair(currentUserID)) {
+        BHT_bootstrapAccount(current, currentUserID);
+    }
+}
+
+#pragma mark - Request / response transforms
+
+static void BHT_applyWebAuth(NSMutableURLRequest *request, NSString *authToken, NSString *ct0, NSString *userID) {
+    request.HTTPShouldHandleCookies = NO;
+
+    for (NSString *header in @[@"Authorization", @"X-Twitter-Client-DeviceID", @"X-Twitter-Client-Version",
+                               @"X-Twitter-Client", @"X-Twitter-API-Version", @"X-Twitter-Client-Limit-Ad-Tracking",
+                               @"X-B3-TraceId", @"Timezone", @"kdt", @"X-Client-UUID"]) {
+        [request setValue:nil forHTTPHeaderField:header];
+    }
+
+    [request setValue:BHTWebBearer forHTTPHeaderField:@"authorization"];
+    [request setValue:@"OAuth2Session" forHTTPHeaderField:@"x-twitter-auth-type"];
+    [request setValue:@"yes" forHTTPHeaderField:@"x-twitter-active-user"];
+    if (ct0.length) {
+        [request setValue:ct0 forHTTPHeaderField:@"x-csrf-token"];
+    }
+
+    NSMutableArray<NSString *> *cookiePairs = [NSMutableArray array];
+    if (authToken.length) {
+        [cookiePairs addObject:[NSString stringWithFormat:@"auth_token=%@", authToken]];
+    }
+    if (ct0.length) {
+        [cookiePairs addObject:[NSString stringWithFormat:@"ct0=%@", ct0]];
+    }
+    if (userID.length) {
+        [cookiePairs addObject:[NSString stringWithFormat:@"twid=u%%3D%@", userID]];
+    }
+    [request setValue:[cookiePairs componentsJoinedByString:@"; "] forHTTPHeaderField:@"Cookie"];
+}
+
+#pragma mark - Hooks
+
+static void BHT_maybeHandleHarvestWebView(__unsafe_unretained id webViewController) {
+    if (!webViewController || !objc_getAssociatedObject(webViewController, BHTWebHarvestWebViewKey)) {
+        return;
+    }
+
+    WKWebView *webView = nil;
+    @try {
+        if ([webViewController respondsToSelector:@selector(webView)]) {
+            webView = ((WKWebView *(*)(id, SEL))objc_msgSend)(webViewController, @selector(webView));
+        }
+    } @catch (__unused NSException *exception) {}
+
+    void (^finish)(void) = ^{
+        BHT_harvestWebCookiesFromSharedStorage();
+        BHT_refreshWebCookiesViaWebView();
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            BHT_teardownWebHarvestWindow();
+        });
+    };
+
+    if ([webView isKindOfClass:%c(WKWebView)]) {
+        [webView.configuration.websiteDataStore.httpCookieStore getAllCookies:^(NSArray<NSHTTPCookie *> *cookies) {
+            BHT_storeWebCookies(cookies);
+            finish();
+        }];
+    } else {
+        finish();
+    }
+}
+
+static BOOL BHT_isCreateTweetURL(NSURL *url) {
+    return url && [url.path hasSuffix:@"/CreateTweet"];
+}
+
+// The queryId sits in the request path: .../graphql/<queryId>/CreateTweet
+static NSString *BHT_queryIDFromCreateTweetURL(NSURL *url) {
+    NSArray<NSString *> *components = url.path.pathComponents;
+    if (components.count >= 2 && [components.lastObject isEqualToString:@"CreateTweet"]) {
+        return components[components.count - 2];
+    }
+    return nil;
+}
+
+static NSString *BHT_postingUserIDFromRequest(NSURLRequest *request) {
+    NSString *auth = [request valueForHTTPHeaderField:@"Authorization"];
+    if (![auth isKindOfClass:[NSString class]]) {
+        return nil;
+    }
+    NSRange marker = [auth rangeOfString:@"oauth_token=\""];
+    if (marker.location == NSNotFound) {
+        return nil;
+    }
+    NSString *rest = [auth substringFromIndex:NSMaxRange(marker)];
+    NSRange endQuote = [rest rangeOfString:@"\""];
+    if (endQuote.location == NSNotFound) {
+        return nil;
+    }
+    NSString *token = [rest substringToIndex:endQuote.location]; // "<userID>-<secret>"
+    NSRange dash = [token rangeOfString:@"-"];
+    return dash.location != NSNotFound ? [token substringToIndex:dash.location] : nil;
+}
+
+static NSString *BHT_harvestedUserID(void) {
+    if (BHTWebTwid.length == 0) {
+        return nil;
+    }
+    NSString *decoded = [BHTWebTwid stringByRemovingPercentEncoding] ?: BHTWebTwid;
+    NSRange eq = [decoded rangeOfString:@"="];
+    NSString *idPart = eq.location != NSNotFound ? [decoded substringFromIndex:NSMaxRange(eq)] : decoded;
+    NSCharacterSet *nonDigits = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
+    NSString *digits = [[idPart componentsSeparatedByCharactersInSet:nonDigits] componentsJoinedByString:@""];
+    return digits.length ? digits : nil;
+}
+
+static NSString *BHT_authTokenForUserID(NSString *userID) {
+    if (userID.length == 0) {
+        return nil;
+    }
+
+    NSString *primaryUID = BHT_harvestedUserID();
+    if (primaryUID.length && [primaryUID isEqualToString:userID] && BHTWebAuthToken.length) {
+        return BHTWebAuthToken;
+    }
+
+    if (BHTWebAuthMulti.length == 0) {
+        return nil;
+    }
+    NSString *decoded = [BHTWebAuthMulti stringByRemovingPercentEncoding] ?: BHTWebAuthMulti;
+    decoded = [decoded stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"\""]];
+    NSCharacterSet *separators = [NSCharacterSet characterSetWithCharactersInString:@"|,"];
+    for (NSString *entry in [decoded componentsSeparatedByCharactersInSet:separators]) {
+        NSRange colon = [entry rangeOfString:@":"];
+        if (colon.location == NSNotFound) {
+            continue;
+        }
+        NSString *uid = [entry substringToIndex:colon.location];
+        NSString *token = [entry substringFromIndex:NSMaxRange(colon)];
+        if ([uid isEqualToString:userID] && token.length) {
+            return token;
+        }
+    }
+    return nil;
+}
+
+static void BHT_waitUntilReady(BOOL (^ready)(void), void (^kick)(void)) {
+    if (ready() || [NSThread isMainThread]) {
+        return;
+    }
+    NSUInteger tick = 0;
+    while (![NSThread isMainThread] && !ready()) {
+        if (kick && (tick % 60 == 0)) { // ~every 3s
+            dispatch_async(dispatch_get_main_queue(), kick);
+        }
+        [NSThread sleepForTimeInterval:0.05];
+        tick++;
+    }
+}
+
+static BOOL BHT_waitUntilReadyBounded(BOOL (^ready)(void), void (^kick)(void), NSTimeInterval maxSeconds) {
+    if (ready()) {
+        return YES;
+    }
+    if ([NSThread isMainThread]) {
+        return NO;
+    }
+    NSUInteger tick = 0;
+    NSUInteger maxTicks = (NSUInteger)(maxSeconds / 0.05);
+    while (![NSThread isMainThread] && !ready() && tick < maxTicks) {
+        if (kick && (tick % 60 == 0)) { // ~every 3s
+            dispatch_async(dispatch_get_main_queue(), kick);
+        }
+        [NSThread sleepForTimeInterval:0.05];
+        tick++;
+    }
+    return ready();
+}
+
+static BOOL BHT_resolveWebCreds(NSString *userID, NSString **outAuthToken, NSString **outCt0) {
+    NSDictionary *cached = BHT_cachedPair(userID);
+    NSString *authToken = cached[@"auth_token"];
+    NSString *ct0 = cached[@"ct0"];
+    if (outAuthToken) {
+        *outAuthToken = authToken;
+    }
+    if (outCt0) {
+        *outCt0 = ct0;
+    }
+    return userID.length > 0 && authToken.length > 0 && ct0.length > 0;
+}
+
+@interface BHTCt0Fetcher : NSObject <NSURLSessionTaskDelegate>
+@property (nonatomic, copy) NSString *ct0;
+@property (nonatomic, copy) NSString *twid;
+@property (nonatomic, assign) BOOL loggedOut;
+- (void)captureFromResponse:(NSURLResponse *)response;
+@end
+
+@implementation BHTCt0Fetcher
+- (void)captureFromResponse:(NSURLResponse *)response {
+    if (![response isKindOfClass:[NSHTTPURLResponse class]]) {
+        return;
+    }
+    NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
+    NSArray<NSHTTPCookie *> *cookies = [NSHTTPCookie cookiesWithResponseHeaderFields:http.allHeaderFields
+                                                                             forURL:http.URL ?: response.URL];
+    for (NSHTTPCookie *cookie in cookies) {
+        if ([cookie.name isEqualToString:@"ct0"] && cookie.value.length) {
+            self.ct0 = [cookie.value copy];
+        } else if ([cookie.name isEqualToString:@"twid"] && cookie.value.length) {
+            self.twid = [cookie.value copy];
+        }
+    }
+}
+- (void)noteRedirectTarget:(NSURL *)url {
+    NSString *path = url.absoluteString.lowercaseString ?: @"";
+    if ([path containsString:@"login"] || [path containsString:@"logout"] ||
+        [path containsString:@"/i/flow/"] || [path containsString:@"account/access"]) {
+        self.loggedOut = YES;
+    }
+}
+- (void)URLSession:(__unused NSURLSession *)session
+              task:(__unused NSURLSessionTask *)task
+willPerformHTTPRedirection:(NSHTTPURLResponse *)response
+        newRequest:(NSURLRequest *)request
+ completionHandler:(void (^)(NSURLRequest *))completionHandler {
+    [self captureFromResponse:response];
+    [self noteRedirectTarget:request.URL];
+    completionHandler(request);
+}
+@end
+
+static NSString *BHT_userIDDigitsFromTwid(NSString *twid) {
+    if (twid.length == 0) {
+        return nil;
+    }
+    NSString *decoded = [twid stringByRemovingPercentEncoding] ?: twid;
+    NSCharacterSet *nonDigits = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
+    NSString *digits = [[decoded componentsSeparatedByCharactersInSet:nonDigits] componentsJoinedByString:@""];
+    return digits.length ? digits : nil;
+}
+
+static NSString *BHT_fetchCt0Sync(NSString *authToken, NSString *expectedUserID) {
+    if (authToken.length == 0 || [NSThread isMainThread]) {
+        return nil;
+    }
+
+    BHTCt0Fetcher *fetcher = [BHTCt0Fetcher new];
+    NSURLSessionConfiguration *config = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    config.HTTPCookieStorage = nil;
+    config.HTTPShouldSetCookies = NO;
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:config delegate:fetcher delegateQueue:nil];
+
+    NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:@"https://x.com/"]];
+    request.HTTPShouldHandleCookies = NO;
+    [request setValue:[NSString stringWithFormat:@"auth_token=%@", authToken] forHTTPHeaderField:@"Cookie"];
+    [request setValue:@"Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+   forHTTPHeaderField:@"User-Agent"];
+
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    [[session dataTaskWithRequest:request completionHandler:^(__unused NSData *data,
+                                                              NSURLResponse *response,
+                                                              __unused NSError *error) {
+        [fetcher captureFromResponse:response];
+        dispatch_semaphore_signal(done);
+    }] resume];
+    dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)));
+    [session finishTasksAndInvalidate];
+
+    if (fetcher.loggedOut) {
+        return nil;
+    }
+
+    NSString *responseUserID = BHT_userIDDigitsFromTwid(fetcher.twid);
+    if (expectedUserID.length && responseUserID.length && ![responseUserID isEqualToString:expectedUserID]) {
+        return nil;
+    }
+    return fetcher.ct0;
+}
+
+static NSMutableURLRequest *BHT_webRequestFromNativeSend(NSURLRequest *request) {
+    if (!BHT_isCreateTweetURL(request.URL)) {
+        return nil;
+    }
+
+    if (!BHT_nativeCreateTweetInterceptEnabled()) {
+        return nil;
+    }
+
+    NSString *queryID = BHT_queryIDFromCreateTweetURL(request.URL);
+    if (queryID.length && ![queryID isEqualToString:BHTWebCreateTweetQueryID]) {
+        BHTWebCreateTweetQueryID = [queryID copy];
+        [[NSUserDefaults standardUserDefaults] setObject:queryID forKey:BHTWebQueryIDDefaultsKey];
+    }
+
+    if (BHTWebXTID.length == 0) {
+        BHT_waitUntilReady(^BOOL{ return BHTWebXTID.length > 0; }, ^{
+            if (!BHTWebHelperWebView) {
+                BHT_refreshWebCookiesViaWebView();
+            } else if (BHTWebHelperReady) {
+                BHT_refreshXTID();
+            }
+        });
+        if (BHTWebXTID.length == 0) {
+            return nil;
+        }
+    }
+
+    BHT_harvestWebCookiesFromSharedStorage();
+
+    NSString *postingUserID = BHT_postingUserIDFromRequest(request);
+    if (postingUserID.length == 0) {
+        return nil;
+    }
+
+    NSString *authToken = nil, *ct0 = nil;
+
+    if (!BHT_resolveWebCreds(postingUserID, &authToken, &ct0)) {
+        NSString *token = BHT_authTokenForUserID(postingUserID);
+
+        for (int attempt = 0; attempt < 2 && ct0.length == 0; attempt++) {
+            if (token.length == 0) {
+                id account = BHT_accountForUserID(postingUserID);
+                if (!account) {
+                    break;
+                }
+                NSString *waitUserID = postingUserID;
+                __block id waitAccount = account;
+                BHT_waitUntilReadyBounded(^BOOL{
+                    BHT_harvestWebCookiesFromSharedStorage();
+                    return BHT_authTokenForUserID(waitUserID).length > 0;
+                }, ^{
+                    BHT_bootstrapAccount(waitAccount, waitUserID);
+                }, 30.0);
+                token = BHT_authTokenForUserID(postingUserID);
+                if (token.length == 0) {
+                    break;
+                }
+            }
+
+            NSString *fresh = BHT_fetchCt0Sync(token, postingUserID);
+            if (fresh.length) {
+                authToken = token;
+                ct0 = fresh;
+                BHT_setCachedPair(postingUserID, @{
+                    @"auth_token": token,
+                    @"ct0": fresh,
+                    @"twid": [NSString stringWithFormat:@"u=%@", postingUserID],
+                });
+            } else {
+                BHT_setCachedPair(postingUserID, nil);
+                token = nil;
+            }
+        }
+
+        if (authToken.length == 0 || ct0.length == 0) {
+            return nil;
+        }
+    }
+
+    NSMutableURLRequest *outgoing = [request mutableCopy];
+    BHT_applyWebAuth(outgoing, authToken, ct0, postingUserID);
+    [outgoing setValue:BHTWebXTID forHTTPHeaderField:@"x-client-transaction-id"];
+    BHT_refreshXTID();
+    // Tag the request with the account it's posting as so the task observer can invalidate the
+    // right account's cached ct0 if the send comes back 4xx.
+    objc_setAssociatedObject(outgoing, BHTWebPostingUIDKey, postingUserID, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return outgoing;
+}
+
+// Watches a rewritten CreateTweet task and, if it finishes with a 4xx, it drops the ct0
+// from the cache
+@interface BHTCreateTweetWatcher : NSObject
+@property (nonatomic, copy) NSString *userID;
+@end
+
+@implementation BHTCreateTweetWatcher
+- (void)observeValueForKeyPath:(NSString *)keyPath
+                      ofObject:(id)object
+                        change:(__unused NSDictionary *)change
+                       context:(__unused void *)context {
+    NSURLSessionTask *task = object;
+    if (![keyPath isEqualToString:@"state"] || task.state != NSURLSessionTaskStateCompleted) {
+        return;
+    }
+
+    BHTCreateTweetWatcher *keepAlive = self; // survive detaching our own retainer below
+    @try {
+        [task removeObserver:self forKeyPath:@"state"];
+    } @catch (__unused NSException *exception) {}
+    objc_setAssociatedObject(task, BHTCreateTweetWatcherKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    NSInteger code = [task.response isKindOfClass:[NSHTTPURLResponse class]]
+        ? [(NSHTTPURLResponse *)task.response statusCode] : 0;
+    NSString *userID = keepAlive.userID;
+    if (code >= 400 && code < 500 && userID.length) {
+        BHT_setCachedPair(userID, nil);
+    }
+    (void)keepAlive;
+}
+@end
+
+static void BHT_watchCreateTweetTask(id task, NSString *userID) {
+    if (![task isKindOfClass:[NSURLSessionTask class]] || userID.length == 0) {
+        return;
+    }
+    BHTCreateTweetWatcher *watcher = [BHTCreateTweetWatcher new];
+    watcher.userID = userID;
+    objc_setAssociatedObject(task, BHTCreateTweetWatcherKey, watcher, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    @try {
+        [task addObserver:watcher forKeyPath:@"state" options:NSKeyValueObservingOptionNew context:NULL];
+    } @catch (__unused NSException *exception) {}
+}
+
+%hook NSURLSession
+
+- (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request {
+    NSMutableURLRequest *outgoing = BHT_webRequestFromNativeSend(request);
+    if (outgoing) {
+        NSURLSessionDataTask *task = %orig(outgoing);
+        BHT_watchCreateTweetTask(task, objc_getAssociatedObject(outgoing, BHTWebPostingUIDKey));
+        return task;
+    }
+    return %orig;
+}
+
+- (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request
+                            completionHandler:(id)completionHandler {
+    NSMutableURLRequest *outgoing = BHT_webRequestFromNativeSend(request);
+    if (outgoing) {
+        NSURLSessionDataTask *task = %orig(outgoing, completionHandler);
+        BHT_watchCreateTweetTask(task, objc_getAssociatedObject(outgoing, BHTWebPostingUIDKey));
+        return task;
+    }
+    return %orig;
+}
+
+- (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request fromData:(NSData *)bodyData {
+    NSMutableURLRequest *outgoing = BHT_webRequestFromNativeSend(request);
+    if (outgoing) {
+        NSURLSessionUploadTask *task = %orig(outgoing, bodyData);
+        BHT_watchCreateTweetTask(task, objc_getAssociatedObject(outgoing, BHTWebPostingUIDKey));
+        return task;
+    }
+    return %orig;
+}
+
+- (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request fromFile:(NSURL *)fileURL {
+    NSMutableURLRequest *outgoing = BHT_webRequestFromNativeSend(request);
+    if (outgoing) {
+        NSURLSessionUploadTask *task = %orig(outgoing, fileURL);
+        BHT_watchCreateTweetTask(task, objc_getAssociatedObject(outgoing, BHTWebPostingUIDKey));
+        return task;
+    }
+    return %orig;
+}
+
+%end
+
 // MARK: Save tweet as an image
 
 %hook TTAStatusInlineShareButton
@@ -1417,7 +2570,10 @@ static void BHTApplyCopyButtonStyle(UIButton *copyButton, T1ProfileHeaderView *h
             }
 
             UIImage *tweetImage = BH_imageFromView(tweetView);
-            UIActivityViewController *acVC = [[UIActivityViewController alloc] initWithActivityItems:@[tweetImage] applicationActivities:nil];
+            NSData *pngData = UIImagePNGRepresentation(tweetImage);
+            NSURL *pngURL = [[NSURL fileURLWithPath:NSTemporaryDirectory()] URLByAppendingPathComponent:[NSString stringWithFormat:@"%@.png", [[NSUUID UUID] UUIDString]]];
+            [pngData writeToURL:pngURL atomically:YES];
+            UIActivityViewController *acVC = [[UIActivityViewController alloc] initWithActivityItems:@[pngURL] applicationActivities:nil];
             if (is_iPad()) {
                 acVC.popoverPresentationController.sourceView = self;
                 acVC.popoverPresentationController.sourceRect = self.frame;
@@ -1476,24 +2632,112 @@ static void BHTApplyCopyButtonStyle(UIButton *copyButton, T1ProfileHeaderView *h
 
 // MARK: Timeline download
 
+static NSArray *BHT_inlineActionViewClassesForViewModel(NSArray *classes, id viewModel) {
+    if (![classes isKindOfClass:NSArray.class]) {
+        return classes;
+    }
+
+    NSMutableArray *newClasses = [classes mutableCopy];
+
+    Class analyticsButtonClass = %c(TTAStatusInlineAnalyticsButton);
+    if (analyticsButtonClass &&
+        [newClasses containsObject:analyticsButtonClass] &&
+        [BHTManager hideViewCount]) {
+        [newClasses removeObject:analyticsButtonClass];
+    }
+
+    Class bookmarkButtonClass = %c(TTAStatusInlineBookmarkButton);
+    if (bookmarkButtonClass &&
+        [newClasses containsObject:bookmarkButtonClass] &&
+        [BHTManager hideBookmarkButton]) {
+        [newClasses removeObject:bookmarkButtonClass];
+    }
+
+    Class downvoteButtonClass = %c(TTAStatusInlineDownvoteButton);
+    if (downvoteButtonClass &&
+        [newClasses containsObject:downvoteButtonClass] &&
+        [BHTManager hideDownvoteButton]) {
+        [newClasses removeObject:downvoteButtonClass];
+    }
+
+    return [newClasses copy];
+}
+
+%hook T1StatusInlineActionsView
++ (NSArray *)_t1_inlineActionViewClassesForViewModel:(id)arg1 options:(NSUInteger)arg2 displayType:(NSUInteger)arg3 account:(id)arg4 {
+    NSArray *origClasses = %orig;
+    return BHT_inlineActionViewClassesForViewModel(origClasses, arg1);
+}
+%end
+
 %hook TTAStatusInlineActionsView
 + (NSArray *)_t1_inlineActionViewClassesForViewModel:(id)arg1 options:(NSUInteger)arg2 displayType:(NSUInteger)arg3 account:(id)arg4 {
-    NSArray *_orig = %orig;
-    NSMutableArray *newOrig = [_orig mutableCopy];
+    NSArray *origClasses = %orig;
+    return BHT_inlineActionViewClassesForViewModel(origClasses, arg1);
+}
+// The downvote (dislike) button shown on replies/comments is gated by this
+// method rather than being unconditionally present in the class list above.
+// The array filter alone misses it, so intercept the gate directly: forcing
+// NO prevents the button being built in every context (timeline and comments).
++ (BOOL)t1_shouldShowDownvoteButtonForViewModel:(id)arg1 options:(NSUInteger)arg2 anatomyFeatures:(id)arg3 displayType:(NSUInteger)arg4 account:(id)arg5 {
+    if ([BHTManager hideDownvoteButton]) {
+        return NO;
+    }
+    return %orig;
+}
+%end
 
-    if ([BHTManager isVideoCell:arg1] && [BHTManager DownloadingVideos]) {
-        [newOrig addObject:%c(BHDownloadInlineButton)];
+// The reply/comment downvote button is created unconditionally and its actual
+// display is driven by -visibility: the actions view lays out only buttons whose
+// visibility is non-zero and calls setHidden:YES on the rest. Filtering the class
+// list doesn't remove it from the hierarchy, so force its visibility to 0 — this
+// excludes it from layout (no gap) and gets it hidden like any collapsed action.
+%hook TTAStatusInlineDownvoteButton
+- (NSUInteger)visibility {
+    if ([BHTManager hideDownvoteButton]) {
+        return 0;
+    }
+    return %orig;
+}
+%end
+
+// Add a "Download media" item to the tweet overflow (3-dot) menu
+%hook UIViewController
+- (NSArray *)_t1_actionItemsForStatus:(__unsafe_unretained id)status account:(__unsafe_unretained id)account shareableEntity:(__unsafe_unretained id)shareableEntity entityURL:(__unsafe_unretained id)entityURL source:(__unsafe_unretained id)source options:(NSUInteger)options scribeComponent:(__unsafe_unretained id)scribeComponent doneBlock:(__unsafe_unretained id)doneBlock {
+    NSArray *origItems = %orig;
+
+    if (![BHTManager DownloadingVideos] || ![status respondsToSelector:@selector(entities)]) {
+        return origItems;
     }
 
-    if ([newOrig containsObject:%c(TTAStatusInlineAnalyticsButton)] && [BHTManager hideViewCount]) {
-        [newOrig removeObject:%c(TTAStatusInlineAnalyticsButton)];
+    NSArray *mediaEntities = [[status entities] media];
+    BOOL hasVideo = NO;
+    for (TFSTwitterEntityMedia *media in mediaEntities) {
+        if ([media isKindOfClass:%c(TFSTwitterEntityMedia)] && (media.mediaType == 2 || media.mediaType == 3)) {
+            hasVideo = YES;
+            break;
+        }
+    }
+    if (!hasVideo) {
+        return origItems;
     }
 
-    if ([newOrig containsObject:%c(TTAStatusInlineBookmarkButton)] && [BHTManager hideBookmarkButton]) {
-        [newOrig removeObject:%c(TTAStatusInlineBookmarkButton)];
+    static char downloaderKey;
+    BHDownloadInlineButton *downloader = objc_getAssociatedObject(self, &downloaderKey);
+    if (!downloader) {
+        downloader = [%c(BHDownloadInlineButton) new];
+        objc_setAssociatedObject(self, &downloaderKey, downloader, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 
-    return [newOrig copy];
+    TFNActionItem *downloadItem = [%c(TFNActionItem) actionItemWithTitle:[[BHTBundle sharedBundle] localizedStringForKey:@"DOWNLOAD_VIDEOS_OPTION_TITLE"]
+                                                              imageName:@"arrow_down_circle_stroke" action:^{
+        [downloader presentDownloadOptionsForMediaEntities:mediaEntities];
+    }];
+
+    NSMutableArray *newItems = origItems ? [origItems mutableCopy] : [NSMutableArray array];
+    NSUInteger insertIndex = newItems.count > 0 ? newItems.count - 1 : 0;
+    [newItems insertObject:downloadItem atIndex:insertIndex];
+    return newItems;
 }
 %end
 
@@ -1611,104 +2855,418 @@ static void BHTApplyCopyButtonStyle(UIButton *copyButton, T1ProfileHeaderView *h
 }
 %end
 
+static NSString *BHTFeatureSwitchKeyForFeature(id feature) {
+    if (!feature || ![feature respondsToSelector:@selector(key)]) {
+        return nil;
+    }
+
+    NSString *(*keyMessage)(id, SEL) = (NSString *(*)(id, SEL))objc_msgSend;
+    NSString *key = keyMessage(feature, @selector(key));
+    return [key isKindOfClass:[NSString class]] ? key : nil;
+}
+
+static NSNumber *BHTFeatureSwitchOverrideValueForKey(NSString *key) {
+    if (![key isKindOfClass:[NSString class]]) {
+        return nil;
+    }
+
+    // Custom timelines overrides
+    BOOL hideCustomTimelines = [BHTManager hideCustomTimelines];
+    if ([key isEqualToString:@"hometimeline_pinned_tabs_topics_enabled"] ||
+        [key isEqualToString:@"hometimeline_pinned_tabs_generic_timelines_enabled"] ||
+        [key isEqualToString:@"hometimeline_pinned_tabs_sticky_warm_start_enabled"] ||
+        [key isEqualToString:@"home_timeline_sticky_pinned_tab_enabled"] ||
+        [key isEqualToString:@"super_follow_subscriptions_home_timeline_tab_sticky_enabled"]) {
+        return hideCustomTimelines ? @NO : @YES;
+    }
+
+    if ([key isEqualToString:@"home_timeline_non_sticky_tab_on_new_session_enabled"]) {
+        return @NO;
+    }
+
+    if ([key isEqualToString:@"hometimeline_pinned_tabs_limit"] ||
+        [key isEqualToString:@"hometimeline_pinned_tabs_management_pinnedsection_inline_limit"] ||
+        [key isEqualToString:@"hometimeline_pinned_tabs_management_topics_inline_limit"]) {
+        return hideCustomTimelines ? @0 : @100;
+    }
+
+    // Edit tweet
+    if ([key isEqualToString:@"edit_tweet_enabled"] ||
+        [key isEqualToString:@"edit_tweet_ga_composition_enabled"] ||
+        [key isEqualToString:@"edit_tweet_pdp_dialog_enabled"] ||
+        [key isEqualToString:@"edit_tweet_upsell_enabled"]) {
+        return @YES;
+    }
+
+    // Grok translations
+    if ([key isEqualToString:@"grok_translations_bio_inline_translation_is_enabled"] ||
+        [key isEqualToString:@"grok_translations_bio_translation_is_enabled"]) {
+        return @([BHTManager BioTranslate]);
+    }
+
+    if ([key isEqualToString:@"grok_translations_post_inline_translation_is_enabled"] ||
+        [key isEqualToString:@"grok_translations_post_translation_is_enabled"]) {
+        return @YES;
+    }
+
+    // Profile tabs
+    if ([key isEqualToString:@"articles_timeline_profile_tab_enabled"]) {
+        return @(![BHTManager disableArticles]);
+    }
+
+    if ([key isEqualToString:@"highlights_tweets_tab_ui_enabled"]) {
+        return @(![BHTManager disableHighlights]);
+    }
+
+    if ([key isEqualToString:@"media_tab_profile_videos_tab_enabled"] ||
+        [key isEqualToString:@"media_tab_profile_photos_tab_enabled"] ||
+        [key isEqualToString:@"media_tab_enabled"] ||
+        [key isEqualToString:@"media_tab_profile_videos_tab_new_design_enabled"]) {
+        return @(![BHTManager disableMediaTab]);
+    }
+
+    // Age verification bypass
+    if ([key hasPrefix:@"ios_age_assurance"] || [key isEqualToString:@"grok_settings_age_restriction_enabled"]) {
+        if ([BHTManager bypassAgeVerification]) {
+            return @NO;
+        }
+    }
+
+    // Conversation / tweet detail
+    if ([key isEqualToString:@"conversational_replies_ios_minimal_detail_enabled"]) {
+        return @(![BHTManager OldStyle]);
+    }
+
+    if ([key isEqualToString:@"reply_sorting_enabled"]) {
+        return @(![BHTManager replySorting]);
+    }
+
+    if ([key isEqualToString:@"ios_tweet_detail_overflow_in_navigation_enabled"]) {
+        return @NO;
+    }
+
+    if ([key isEqualToString:@"ios_tweet_detail_conversation_context_removal_enabled"]) {
+        return @(![BHTManager restoreReplyContext]);
+    }
+
+    // Tab bar configuration
+    if ([key isEqualToString:@"ios_tab_bar_default_show_grok"]) {
+        return @([[NSUserDefaults standardUserDefaults] boolForKey:@"ios_tab_bar_default_show_grok"]);
+    }
+
+    if ([key isEqualToString:@"ios_tab_bar_default_show_profile"]) {
+        return @([[NSUserDefaults standardUserDefaults] boolForKey:@"ios_tab_bar_default_show_profile"]);
+    }
+
+    if ([key isEqualToString:@"ios_tab_bar_default_show_communities"]) {
+        return @([[NSUserDefaults standardUserDefaults] boolForKey:@"ios_tab_bar_default_show_communities"]);
+    }
+
+    // In-app article webview
+    if ([key isEqualToString:@"ios_in_app_article_webview_enabled"]) {
+        NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
+        if ([d objectForKey:key] != nil) {
+            return @([d boolForKey:key]);
+        }
+        return @YES;
+    }
+
+    // Premium / subscription upsell disables
+    if ([key isEqualToString:@"creator_purchases_dashboard_enabled"] ||
+        [key isEqualToString:@"subscriptions_settings_item_enabled"] ||
+        [key isEqualToString:@"grok_ios_profile_summary_enabled"] ||
+        [key isEqualToString:@"creator_monetization_dashboard_enabled"] ||
+        [key isEqualToString:@"creator_monetization_profile_subscription_tweets_tab_enabled"] ||
+        [key isEqualToString:@"ios_subscription_journey_enabled"] ||
+        [key isEqualToString:@"subscriptions_upsells_get_verified_profile"] ||
+        [key isEqualToString:@"ios_profile_analytics_upsell_possible_enabled"] ||
+        [key isEqualToString:@"ios_profile_analytics_upsell_enabled"] ||
+        [key isEqualToString:@"subscriptions_verification_info_is_identity_verified"] ||
+        [key isEqualToString:@"subscriptions_verification_info_reason_enabled"] ||
+        [key isEqualToString:@"subscriptions_verification_info_verified_since_enabled"] ||
+        [key isEqualToString:@"communities_enable_explore_tab"] ||
+        [key isEqualToString:@"dash_items_download_grok_enabled"]) {
+        return @NO;
+    }
+
+    return nil;
+}
+
 // MARK: Voice, SensitiveTweetWarnings, autoHighestLoad, VideoZoom, VODCaptions, disableSpacesBar feature
 %hook TPSTwitterFeatureSwitches
 // Twitter save all the features and keys in side JSON file in bundle of application fs_embedded_defaults_production.json, and use it in TFNTwitterAccount class but with DM voice maybe developers forget to add boolean variable in the class, so i had to change it from the file.
 // also, you can find every key for every feature i used in this tweak, i can remove all the codes below and find every key for it but I'm lazy to do that, :)
 - (BOOL)boolForKey:(NSString *)key {
-    if ([key isEqualToString:@"edit_tweet_enabled"] || [key isEqualToString:@"edit_tweet_ga_composition_enabled"] || [key isEqualToString:@"edit_tweet_pdp_dialog_enabled"] || [key isEqualToString:@"edit_tweet_upsell_enabled"]) {
-        return true;
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override.boolValue;
     }
 
-    if ([key isEqualToString:@"grok_ios_profile_summary_enabled"] || [key isEqualToString:@"creator_monetization_dashboard_enabled"] || [key isEqualToString:@"creator_monetization_profile_subscription_tweets_tab_enabled"] || [key isEqualToString:@"creator_purchases_dashboard_enabled"]) {
-        return false;
-    }
-
-    if ([key isEqualToString:@"grok_translations_bio_inline_translation_is_enabled"] || [key isEqualToString:@"grok_translations_bio_translation_is_enabled"] || [key isEqualToString:@"grok_translations_post_inline_translation_is_enabled"] || [key isEqualToString:@"grok_translations_post_translation_is_enabled"]) {
-        return true;
-    }
-
-    if ([key isEqualToString:@"subscriptions_upsells_get_verified_profile"] || [key isEqualToString:@"ios_profile_analytics_upsell_possible_enabled"] || [key isEqualToString:@"ios_profile_analytics_upsell_enabled"]) {
-        return false;
-    }
-
-    if ([key isEqualToString:@"subscriptions_verification_info_is_identity_verified"] || [key isEqualToString:@"subscriptions_verification_info_reason_enabled"] || [key isEqualToString:@"subscriptions_verification_info_verified_since_enabled"]) {
-        return false;
-    }
-
-    if ([key isEqualToString:@"articles_timeline_profile_tab_enabled"]) {
-        return ![BHTManager disableArticles];
-    }
-
-    if ([key isEqualToString:@"ios_dm_dash_enabled"]) {
-        return ![BHTManager disableXChat];
-    }
-
-    if ([key isEqualToString:@"highlights_tweets_tab_ui_enabled"]) {
-        return ![BHTManager disableHighlights];
-    }
-
-    if ([key isEqualToString:@"media_tab_profile_videos_tab_enabled"] || [key isEqualToString:@"media_tab_profile_photos_tab_enabled"]) {
-        return ![BHTManager disableMediaTab];
-    }
-
-    if ([key isEqualToString:@"communities_enable_explore_tab"] || [key isEqualToString:@"subscriptions_settings_item_enabled"]) {
-        return false;
-    }
-
-    if ([key isEqualToString:@"dash_items_download_grok_enabled"]) {
-        return false;
-    }
-
-    if ([key isEqualToString:@"conversational_replies_ios_minimal_detail_enabled"]) {
-        return ![BHTManager OldStyle];
-    }
-
-    if ([key isEqualToString:@"dm_compose_bar_v2_enabled"]) {
-        return ![BHTManager dmComposeBarV2];
-    }
-
-    if ([key isEqualToString:@"reply_sorting_enabled"]) {
-        return ![BHTManager replySorting];
-    }
-
-    if ([key isEqualToString:@"dm_voice_creation_enabled"]) {
-        return ![BHTManager dmVoiceCreation];
-    }
-
-    if ([key isEqualToString:@"ios_tweet_detail_overflow_in_navigation_enabled"]) {
-        return false;
-    }
-
-    if ([key isEqualToString:@"ios_subscription_journey_enabled"]) {
-        return false;
-    }
-
-    if ([key isEqualToString:@"ios_tweet_detail_conversation_context_removal_enabled"]) {
-        return ![BHTManager restoreReplyContext];
-    }
-
-    if ([key isEqualToString:@"ios_tab_bar_default_show_grok"]) {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"ios_tab_bar_default_show_grok"];
-    }
-
-    if ([key isEqualToString:@"ios_tab_bar_default_show_profile"]) {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"ios_tab_bar_default_show_profile"];
-    }
-
-    if ([key isEqualToString:@"ios_tab_bar_default_show_communities"]) {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"ios_tab_bar_default_show_communities"];
-    }
-
-    if ([key isEqualToString:@"ios_in_app_article_webview_enabled"]) {
-        NSUserDefaults *d = [NSUserDefaults standardUserDefaults];
-        if ([d objectForKey:key] != nil) {
-            return [d boolForKey:key];   // respect the Settings toggle
-        }
-        return YES;                       // default off when unset
-    }
-    
     return %orig;
+}
+
+- (id)featureSwitchValueForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override;
+    }
+
+    return %orig;
+}
+
+- (NSInteger)integerForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override.integerValue;
+    }
+
+    return %orig;
+}
+
+- (NSNumber *)numberForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override;
+    }
+
+    return %orig;
+}
+
+- (id)rawValueForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override;
+    }
+
+    return %orig;
+}
+
+- (BOOL)unsafePeekBoolForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override.boolValue;
+    }
+
+    return %orig;
+}
+
+- (NSInteger)unsafePeekIntegerForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override.integerValue;
+    }
+
+    return %orig;
+}
+%end
+
+%hook TFSAccountFeatureSwitches
+- (BOOL)boolForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override.boolValue;
+    }
+
+    return %orig;
+}
+
+- (id)featureSwitchValueForFeature:(id)feature {
+    NSString *key = BHTFeatureSwitchKeyForFeature(feature);
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override;
+    }
+
+    return %orig;
+}
+
+- (NSNumber *)numberValueForFeature:(id)feature {
+    NSString *key = BHTFeatureSwitchKeyForFeature(feature);
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override;
+    }
+
+    return %orig;
+}
+%end
+
+%hook TFSFeatureSwitches
+- (BOOL)boolForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override.boolValue;
+    }
+
+    return %orig;
+}
+
+- (id)featureSwitchValueForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override;
+    }
+
+    return %orig;
+}
+
+- (NSInteger)integerForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override.integerValue;
+    }
+
+    return %orig;
+}
+
+- (NSNumber *)numberForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override;
+    }
+
+    return %orig;
+}
+
+- (id)rawValueForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override;
+    }
+
+    return %orig;
+}
+
+- (BOOL)unsafePeekBoolForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override.boolValue;
+    }
+
+    return %orig;
+}
+
+- (NSInteger)unsafePeekIntegerForKey:(NSString *)key {
+    NSNumber *override = BHTFeatureSwitchOverrideValueForKey(key);
+    if (override) {
+        return override.integerValue;
+    }
+
+    return %orig;
+}
+%end
+
+// MARK: Override the login screens
+%hook T1AccountsViewController
+- (void)private_startLoginFlowWithSender:(id)sender {
+    [BHTLegacyLoginViewController presentLoginFrom:(UIViewController *)self];
+}
+%end
+
+%hook T1HostViewController
+- (void)makeOnboardingViewControllerWithCompletion:(void (^)(id))completion {
+    if (completion == nil) {
+        %orig;
+        return;
+    }
+    completion([BHTLegacyLoginViewController loginRootNavigationController]);
+}
+%end
+
+
+static NSTimeInterval BHTPinnedTabsLaunchUptime = 0;
+
+static id BHTPinnedTabsPersistenceCoordinator(void) {
+    static id coordinator = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        coordinator = [NSObject new];
+    });
+    return coordinator;
+}
+
+static NSArray *BHTPinnedTimelinesSnapshot(id repository) {
+    if (!repository || ![repository respondsToSelector:@selector(pinnedTimelines)]) {
+        return nil;
+    }
+    id value = ((id (*)(id, SEL))objc_msgSend)(repository, @selector(pinnedTimelines));
+    return [value isKindOfClass:[NSArray class]] ? value : nil;
+}
+
+static void BHTRecordPinnedTimelineUnpin(void) {
+    @synchronized (BHTPinnedTabsPersistenceCoordinator()) {
+        [[NSUserDefaults standardUserDefaults] setDouble:CFAbsoluteTimeGetCurrent() forKey:@"BHTCustomTimelinesUnpinTime"];
+    }
+}
+
+%hook _TtC32TwitterHomeFeatureImplementation31CachedPinnedTimelinesRepository
+- (void)unpinTimelineWithTimeline:(id)timeline completion:(id)completion {
+    BHTRecordPinnedTimelineUnpin();
+    %orig;
+}
+
+- (void)unpinTimelineWithTimelineInput:(id)input completion:(id)completion {
+    BHTRecordPinnedTimelineUnpin();
+    %orig;
+}
+
+- (void)updatePinnedTimelines:(id)timelines {
+    if ([BHTManager hideCustomTimelines]) {
+        %orig;
+        return;
+    }
+
+    BOOL block = NO;
+    @synchronized (BHTPinnedTabsPersistenceCoordinator()) {
+        BOOL isArray = [timelines isKindOfClass:[NSArray class]];
+        NSUInteger incomingCount = isArray ? [timelines count] : 0;
+        NSTimeInterval now = CFAbsoluteTimeGetCurrent();
+        NSTimeInterval lastUnpin = [[NSUserDefaults standardUserDefaults] doubleForKey:@"BHTCustomTimelinesUnpinTime"];
+
+        if ((now - lastUnpin < 120.0) || (isArray && incomingCount != 0)) {
+            block = NO;
+        } else {
+            NSArray *snapshot = BHTPinnedTimelinesSnapshot(self);
+            if (snapshot.count == 0) {
+                block = NO;
+            } else {
+                NSTimeInterval uptime = [[NSProcessInfo processInfo] systemUptime];
+                BOOL withinStartupWindow = (BHTPinnedTabsLaunchUptime > 0) && ((uptime - BHTPinnedTabsLaunchUptime) < 20.0);
+                block = withinStartupWindow;
+            }
+        }
+    }
+
+    if (!block) {
+        %orig;
+    }
+}
+%end
+
+static void BHTHideHomeAddTabButton(id container) {
+    if (![BHTManager hideCustomTimelines]) {
+        return;
+    }
+    @try {
+        id button = [container valueForKey:@"addTabButton"];
+        if ([button isKindOfClass:[UIView class]]) {
+            ((UIView *)button).hidden = YES;
+        }
+    } @catch (__unused NSException *exception) {
+
+		}
+}
+
+%hook _TtC32TwitterHomeFeatureImplementation35HomeTimelineContainerViewController
+- (id)tfn_navigationBarAccessoryView {
+    id accessory = %orig;
+    BHTHideHomeAddTabButton(self);
+    return accessory;
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    %orig;
+    BHTHideHomeAddTabButton(self);
 }
 %end
 
@@ -1796,9 +3354,38 @@ static void BHTApplyCopyButtonStyle(UIButton *copyButton, T1ProfileHeaderView *h
 %end
 
 %hook TFNTwitterAccount
-- (_Bool)isXChatEnabled {
-    return [BHTManager disableXChat] ? false : %orig;
+- (BOOL)_isSubscriptionsGatingBypassEnabled {
+    return YES;
 }
+
+- (BOOL)canAccessXPayments {
+    return YES;
+}
+
+- (BOOL)isGrokAskGrokButtonUnderPostFocalEnabled {
+    return YES;
+}
+
+- (BOOL)isGrokAskGrokButtonUnderPostPreviewEnabled {
+    return YES;
+}
+
+- (BOOL)isGrokEditWithGrokButtonUnderPostFocalEnabled {
+    return YES;
+}
+
+- (BOOL)isGrokEditWithGrokButtonUnderPostPreviewEnabled {
+    return YES;
+}
+
+- (BOOL)isPremiumTierUser {
+    return YES;
+}
+
+- (BOOL)isXPaymentsEnrolled {
+    return YES;
+}
+
 - (_Bool)isEditProfileUsernameEnabled {
     return true;
 }
@@ -1810,6 +3397,9 @@ static void BHTApplyCopyButtonStyle(UIButton *copyButton, T1ProfileHeaderView *h
 }
 - (_Bool)isSensitiveTweetWarningsConsumeEnabled {
     return [BHTManager disableSensitiveTweetWarnings] ? false : %orig;
+}
+- (BOOL)isAgeAssuranceAgeVerificationFlowEnabled {
+    return [BHTManager bypassAgeVerification] ? NO : %orig;
 }
 - (_Bool)isVideoDynamicAdEnabled {
     return [BHTManager HidePromoted] ? false : %orig;
@@ -1826,6 +3416,36 @@ static void BHTApplyCopyButtonStyle(UIButton *copyButton, T1ProfileHeaderView *h
 }
 - (_Bool)isDoubleMaxZoomFor4KImagesEnabled {
     return [BHTManager autoHighestLoad] ? true : %orig;
+}
+%end
+
+%hook _TtCV4Grok12GrokRootView9ViewModel
+- (BOOL)_isPremiumUser {
+    return YES;
+}
+%end
+
+%hook TFNTwitterStatus
+- (BOOL)hasImageInterstitial {
+    return [BHTManager disableSensitiveTweetWarnings] ? false : %orig;
+}
+
+- (id)imageInterstitial {
+    return [BHTManager disableSensitiveTweetWarnings] ? nil : %orig;
+}
+
+- (id)innerImageInterstitial {
+    return [BHTManager disableSensitiveTweetWarnings] ? nil : %orig;
+}
+
+- (BOOL)isPossiblySensitiveViewModelForAccount:(id)account {
+    return [BHTManager disableSensitiveTweetWarnings] ? false : %orig;
+}
+%end
+
+%hook HFHealthSafetyFeature
++ (BOOL)isTweetMedialInterstitialEnabled:(id)featureSwitches {
+    return [BHTManager disableSensitiveTweetWarnings] ? false : %orig;
 }
 %end
 
@@ -1905,6 +3525,49 @@ static void BHTApplyCopyButtonStyle(UIButton *copyButton, T1ProfileHeaderView *h
         } showFrom:topMostController()];
     } else {
         return %orig;
+    }
+}
+%end
+
+// MARK: - Hide the trending/explore content on the Explore tab (keep the search bar)
+static void BHT_hideExploreTabBar(UIView *view) {
+    if (!view) return;
+    if ([view isKindOfClass:NSClassFromString(@"TFNScrollingHorizontalLabelView")]) {
+        view.hidden = YES;
+        return;
+    }
+    for (UIView *subview in view.subviews) {
+        BHT_hideExploreTabBar(subview);
+    }
+}
+
+%hook T1GuideNavigationController
+- (void)viewDidLayoutSubviews {
+    %orig;
+    if (![BHTManager hideTrends]) return;
+    @try {
+        UINavigationController *nav = (UINavigationController *)self;
+
+        UIViewController *guideVC = nav.viewControllers.firstObject;
+        if (!guideVC) return;
+
+        Class chromeClass = NSClassFromString(@"T1TwitterSwift.URTChromeViewController");
+        UIViewController *chrome = nil;
+        for (UIViewController *child in guideVC.childViewControllers) {
+            BOOL isChrome = chromeClass ? [child isKindOfClass:chromeClass]
+                                        : [child respondsToSelector:@selector(tfn_navigationBarAccessoryView)];
+            if (isChrome) { chrome = child; break; }
+        }
+        if (!chrome) return;
+
+        if (chrome.isViewLoaded) chrome.view.hidden = YES;
+
+        if ([chrome respondsToSelector:@selector(tfn_navigationBarAccessoryView)]) {
+            UIView *accessory = ((UIView *(*)(id, SEL))objc_msgSend)(chrome, @selector(tfn_navigationBarAccessoryView));
+            BHT_hideExploreTabBar(accessory);
+        }
+    } @catch (NSException *exception) {
+        NSLog(@"[BHTwitter] hideTrends exception: %@", exception);
     }
 }
 %end
@@ -2062,7 +3725,7 @@ static void BHTApplyCopyButtonStyle(UIButton *copyButton, T1ProfileHeaderView *h
 %new - (void)customFontsHandler {
     if ([[NSFileManager defaultManager] fileExistsAtPath:@"/var/mobile/Library/Fonts/AddedFontCache.plist"]) {
         NSAttributedString *AttString = [[NSAttributedString alloc] initWithString:[[BHTBundle sharedBundle] localizedStringForKey:@"CUSTOM_FONTS_MENU_TITLE"] attributes:@{
-            NSFontAttributeName: [[%c(TAEStandardFontGroup) sharedFontGroup] headline2BoldFont],
+            NSFontAttributeName: [BHTManager menuTitleFont],
             NSForegroundColorAttributeName: UIColor.labelColor
         }];
         TFNActiveTextItem *title = [[%c(TFNActiveTextItem) alloc] initWithTextModel:[[%c(TFNAttributedTextModel) alloc] initWithAttributedString:AttString] activeRanges:nil];
@@ -2933,17 +4596,200 @@ objc_setAssociatedObject(footerView,
 
 %end
 
-// Helper for the "Replace 'post' with 'Tweet' in notifications" setting
-static BOOL BHNotifReplacePostWithTweetEnabled(void) {
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+// MARK: Restore Twitter terminology, controlled by "restore_twitter_names"
+// Two layers, both driven by locale files in the tweak bundle:
+//   1. RenameOverrides.strings — Twitter localization key -> exact replacement,
+//      a missing key falls through to the generic replacement
+//   2. RenameWords.strings — generic word replacements ("X" -> "Twitter",
+//      "Post" -> "Tweet", etc.) applied to localized and server-side strings
+// Both are strictly per-language: a language without its own copy of a file gets no
+// renaming from that layer, rather than English rules applied to non-English text.
 
-    // Fall back to BrandingSettings default (@YES) if the key is missing
-    if ([defaults objectForKey:@"notif_replace_post_with_tweet"] == nil) {
-        return YES;
+static NSDictionary<NSString *, NSString *> *BHTRenameTable(NSString *name) {
+    NSBundle *bundle = [BHTBundle sharedBundle].mainBundle;
+    NSString *appLanguage = [[NSBundle mainBundle] preferredLocalizations].firstObject ?: @"en";
+    NSString *localization = [NSBundle preferredLocalizationsFromArray:bundle.localizations
+                                                        forPreferences:@[appLanguage]].firstObject;
+
+    // preferredLocalizationsFromArray: if there's no match, it silently
+    // returns the development region (en) instead, and rejects that so unsupported
+    // languages skip renaming rather than getting English rules
+    NSString *appCode = [appLanguage componentsSeparatedByString:@"-"].firstObject;
+    NSString *lprojCode = [[localization stringByReplacingOccurrencesOfString:@"_" withString:@"-"]
+                              componentsSeparatedByString:@"-"].firstObject;
+    if (![appCode isEqualToString:lprojCode]) {
+        return @{};
     }
 
-    return [defaults boolForKey:@"notif_replace_post_with_tweet"];
+    NSString *path = [bundle pathForResource:name ofType:@"strings" inDirectory:nil forLocalization:localization];
+    NSString *contents = path ? [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] : nil;
+    NSDictionary *table = [contents propertyListFromStringsFileFormat];
+    return [table isKindOfClass:[NSDictionary class]] ? table : @{};
 }
+
+static NSDictionary<NSString *, NSString *> *BHTRenameKeyOverrides(void) {
+    static NSDictionary *overrides = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ overrides = BHTRenameTable(@"RenameOverrides"); });
+    return overrides;
+}
+
+static NSDictionary<NSString *, NSString *> *BHTwitterWordMap(void) {
+    static NSDictionary *map = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ map = BHTRenameTable(@"RenameWords"); });
+    return map;
+}
+
+// Builds \b(word|word…)\b from the map keys of one sensitivity class, longest word
+// first so inflections win over their stems ("reposts" before "repost").
+static NSRegularExpression *BHTRenameRegex(BOOL caseSensitive) {
+    NSMutableArray<NSString *> *words = [NSMutableArray array];
+    for (NSString *word in BHTwitterWordMap()) {
+        BOOL hasUpper = [word rangeOfCharacterFromSet:[NSCharacterSet uppercaseLetterCharacterSet]].location != NSNotFound;
+        if (hasUpper == caseSensitive) {
+            [words addObject:[NSRegularExpression escapedPatternForString:word]];
+        }
+    }
+    if (words.count == 0) {
+        return nil;
+    }
+
+    [words sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+        if (a.length > b.length) return NSOrderedAscending;
+        if (a.length < b.length) return NSOrderedDescending;
+        return [a compare:b];
+    }];
+    NSString *pattern = [NSString stringWithFormat:@"\\b(%@)\\b", [words componentsJoinedByString:@"|"]];
+    return [NSRegularExpression regularExpressionWithPattern:pattern
+                                                     options:(caseSensitive ? 0 : NSRegularExpressionCaseInsensitive)
+                                                       error:nil];
+}
+
+// Applies the capitalisation style of `token` (all-caps or leading-capital) to `base`.
+static NSString *BHMatchCapitalisation(NSString *token, NSString *base) {
+    if (token.length == 0 || base.length == 0) {
+        return base;
+    }
+
+    NSString *lower = token.lowercaseString;
+    if (token.length > 1 && [token isEqualToString:token.uppercaseString] && ![token isEqualToString:lower]) {
+        return base.uppercaseString;
+    }
+
+    unichar first = [token characterAtIndex:0];
+    if ([[NSCharacterSet uppercaseLetterCharacterSet] characterIsMember:first]) {
+        return [base stringByReplacingCharactersInRange:NSMakeRange(0, 1)
+                                             withString:[base substringToIndex:1].uppercaseString];
+    }
+    return base;
+}
+
+// Returns the ordered list of edits (@"range" -> NSValue, @"repl" -> NSString) to apply
+// to `input`, sorted last-match-first so applying them never invalidates a later range.
+// Returns nil when there is nothing to change.
+static NSArray<NSDictionary *> *BHRenameEdits(NSString *input) {
+    if (input.length == 0) {
+        return nil;
+    }
+
+    static NSRegularExpression *insensitiveRegex = nil;
+    static NSRegularExpression *sensitiveRegex = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        insensitiveRegex = BHTRenameRegex(NO);
+        sensitiveRegex = BHTRenameRegex(YES);
+    });
+
+    NSDictionary *wordMap = BHTwitterWordMap();
+    NSRange full = NSMakeRange(0, input.length);
+    NSMutableArray<NSDictionary *> *edits = [NSMutableArray array];
+
+    for (NSTextCheckingResult *match in [sensitiveRegex matchesInString:input options:0 range:full]) {
+        NSString *repl = wordMap[[input substringWithRange:match.range]];
+        if (repl) {
+            [edits addObject:@{@"range": [NSValue valueWithRange:match.range], @"repl": repl}];
+        }
+    }
+
+    for (NSTextCheckingResult *match in [insensitiveRegex matchesInString:input options:0 range:full]) {
+        NSString *token = [input substringWithRange:match.range];
+        NSString *base = wordMap[token.lowercaseString];
+        if (base) {
+            [edits addObject:@{@"range": [NSValue valueWithRange:match.range],
+                               @"repl": BHMatchCapitalisation(token, base)}];
+        }
+    }
+
+    if (edits.count == 0) {
+        return nil;
+    }
+
+    [edits sortUsingComparator:^NSComparisonResult(NSDictionary *a, NSDictionary *b) {
+        NSUInteger la = [a[@"range"] rangeValue].location;
+        NSUInteger lb = [b[@"range"] rangeValue].location;
+        if (la > lb) return NSOrderedAscending;
+        if (la < lb) return NSOrderedDescending;
+        return NSOrderedSame;
+    }];
+    return edits;
+}
+
+static NSString *BHRestoreTwitterTerminology(NSString *input) {
+    // Memoise: labels re-set the same handful of strings over and over.
+    static NSCache<NSString *, NSString *> *cache = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ cache = [NSCache new]; });
+
+    NSString *cached = [cache objectForKey:input];
+    if (cached) {
+        return cached;
+    }
+
+    NSArray<NSDictionary *> *edits = BHRenameEdits(input);
+    NSString *output = input;
+    if (edits) {
+        NSMutableString *result = [input mutableCopy];
+        for (NSDictionary *edit in edits) {
+            [result replaceCharactersInRange:[edit[@"range"] rangeValue] withString:edit[@"repl"]];
+        }
+        output = [result copy];
+    }
+
+    [cache setObject:output forKey:input];
+    return output;
+}
+
+static NSAttributedString *BHRestoreTwitterAttributed(NSAttributedString *input) {
+    NSArray<NSDictionary *> *edits = BHRenameEdits(input.string);
+    if (!edits) {
+        return input;
+    }
+
+    NSMutableAttributedString *result = [input mutableCopy];
+    for (NSDictionary *edit in edits) {
+        NSRange range = [edit[@"range"] rangeValue];
+        NSDictionary *attrs = [result attributesAtIndex:range.location effectiveRange:NULL];
+        NSAttributedString *piece = [[NSAttributedString alloc] initWithString:edit[@"repl"] attributes:attrs];
+        [result replaceCharactersInRange:range withAttributedString:piece];
+    }
+    return result;
+}
+
+%hook NSBundle
+- (NSString *)localizedStringForKey:(NSString *)key value:(NSString *)value table:(NSString *)tableName {
+    NSString *result = %orig;
+    if (![BHTManager restoreTwitterNames] || self == [BHTBundle sharedBundle].mainBundle) {
+        return result;
+    }
+
+    NSString *override = key ? BHTRenameKeyOverrides()[key] : nil;
+    if (override) {
+        return override;
+    }
+    return result.length > 0 ? BHRestoreTwitterTerminology(result) : result;
+}
+%end
 
 %hook TFNAttributedTextView
 - (void)setTextModel:(TFNAttributedTextModel *)model {
@@ -2989,124 +4835,19 @@ static BOOL BHNotifReplacePostWithTweetEnabled(void) {
         }
     }
 
-    // --- Notification text replacements ---
-    BOOL isNotificationView = NO;
-    {
-        UIView *view = self;
-        while (view && !isNotificationView) {
-            NSString *className = NSStringFromClass([view class]);
-            if ([className containsString:@"Notification"] ||
-                [className containsString:@"T1NotificationsTimeline"]) {
-                isNotificationView = YES;
-            }
-            view = view.superview;
-        }
-    }
-
-    if (isNotificationView && BHNotifReplacePostWithTweetEnabled()) {
-        if (!newString) {
-            newString = [[NSMutableAttributedString alloc] initWithAttributedString:model.attributedString];
-        }
-
-        NSArray *replacements = @[
-            // Full phrase replacements first
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_reposted_your_post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_retweeted_your_tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_reposted_your_Post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_retweeted_your_Tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_Reposted_your_post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_Retweeted_your_Tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_Reposted_your_Post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_Retweeted_your_Tweet_new"]},
-
-            // Standalone "post" -> "Tweet"
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_your_post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_your_tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_your_Post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_your_Tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_a_post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_a_tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_a_Post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_a_Tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_new_post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_new_tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_new_Post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_new_Tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_New_post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_New_tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_New_Post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_New_Tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_recent_post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_recent_tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_recent_Post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_recent_Tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_Recent_post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_Recent_tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_Recent_Post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_Recent_Tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_pinned_Post_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_pinned_Tweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_your_Posts_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_your_Tweets_new"]},
-
-            // Standalone "reposted" -> "retweeted"
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_reposted_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_retweeted_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_Reposted_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_Retweeted_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_repost_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_retweet_new"]},
-
-            @{@"old": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_Repost_old"],
-              @"new": [[BHTBundle sharedBundle] localizedStringForKey:@"notif_Retweet_new"]}
-        ];
-
-        for (NSDictionary *rep in replacements) {
-            NSString *oldStr = rep[@"old"];
-            NSString *newStr = rep[@"new"];
-            if (oldStr.length == 0 || newStr.length == 0) {
-                continue;
-            }
-
-            NSRange searchRange = [[newString string] rangeOfString:oldStr];
-            while (searchRange.location != NSNotFound) {
-                NSRange runRange = {0, 0};
-                NSDictionary *attrs = [newString attributesAtIndex:searchRange.location
-                                                    effectiveRange:&runRange];
-
-                NSAttributedString *replacement =
-                    [[NSAttributedString alloc] initWithString:newStr attributes:attrs];
-
-                [newString replaceCharactersInRange:searchRange withAttributedString:replacement];
-                modified = YES;
-                textChanged = YES;
-
-                NSUInteger nextLocation = searchRange.location + replacement.length;
-                if (nextLocation >= newString.length) {
-                    break;
-                }
-
-                NSRange remainder = NSMakeRange(nextLocation, newString.length - nextLocation);
-                searchRange = [[newString string] rangeOfString:oldStr options:0 range:remainder];
-            }
+    // --- Restore Twitter terminology ---
+    // TFNAttributedTextView renders interface chrome (notification headers, footers,
+    // timestamps, counts…). Tweet bodies use T1StatusBodyTextView /
+    // TTAStatusBodySelectableContentTextView, so they never reach this hook and are
+    // left untouched. The rewrite is driven by the shared word-boundary transform, so
+    // it changes the actual rendered text rather than a hardcoded list of phrases.
+    if ([BHTManager restoreTwitterNames]) {
+        NSAttributedString *source = newString ?: model.attributedString;
+        NSAttributedString *renamed = BHRestoreTwitterAttributed(source);
+        if (renamed != source) {
+            newString = [renamed mutableCopy];
+            modified = YES;
+            textChanged = YES;
         }
     }
 
@@ -3136,9 +4877,8 @@ static BOOL BHNotifReplacePostWithTweetEnabled(void) {
 static BOOL BHColorTwitterIconEnabled(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 
-    // Fall back to the BrandingSettings default (@YES) if the key is missing
     if ([defaults objectForKey:@"color_twitter_icon_in_top_bar"] == nil) {
-        return YES;
+        return [BHTManager isTwitterBranded];
     }
 
     return [defaults boolForKey:@"color_twitter_icon_in_top_bar"];
@@ -3174,37 +4914,35 @@ static BOOL BHColorTwitterIconEnabled(void) {
 
 %end
 
-// MARK: - Hide Grok Analyze Button (TTAStatusAuthorView)
-
-@interface TTAStatusAuthorView : UIView
-- (id)grokAnalyzeButton;
-@end
-
-%hook TTAStatusAuthorView
-
-- (id)grokAnalyzeButton {
-    UIView *button = %orig;
-    if (button && [BHTManager hideGrokAnalyze]) {
-        button.hidden = YES;
-    }
-    return button;
+// MARK: - Hide Grok Analyze Button
+// The analyze button (timeline author view and post detail nav bar) is gated by a per-tweet
+// boolean the API returns via the includeGrokAnalysisButton request field. Both
+// shouldShowGrokAnalyzeButtonForAuthorView and shouldShowGrokAnalyzeButtonForPostDetailNavBar
+// ultimately return this flag, so reporting it as absent at the model level suppresses the
+// button on every surface without any view-level hiding or navigation-context guessing.
+%hook TFNTwitterCanonicalStatus
+- (BOOL)grokAnalysisButton {
+    if ([BHTManager hideGrokAnalyze]) return NO;
+    return %orig;
 }
-
 %end
 
-// MARK: - Hide Grok Analyze & Subscribe Buttons on Detail View
+%hook TFSTwitterStatus
+- (BOOL)grokAnalysisButton {
+    if ([BHTManager hideGrokAnalyze]) return NO;
+    return %orig;
+}
+%end
+
+// MARK: - Hide Subscribe Button on Detail View
 
 // Minimal interface for TFNButton, used by UIControl hook and FollowButton logic
 @class TFNButton;
 
 %hook UIControl
-// Grok Analyze and Subscribe button
+// Subscribe button
 - (void)addTarget:(id)target action:(SEL)action forControlEvents:(UIControlEvents)controlEvents {
-    if (action == @selector(didTapGrokAnalyze)) {
-        if ([self isKindOfClass:NSClassFromString(@"TFNButton")] && [BHTManager hideGrokAnalyze]) {
-            self.hidden = YES;
-        }
-    } else if (action == @selector(_didTapSubscribe)) {
+    if (action == @selector(_didTapSubscribe)) {
         if ([self isKindOfClass:NSClassFromString(@"TFNButton")] && [BHTManager restoreFollowButton]) {
             self.alpha = 0.0;
             self.userInteractionEnabled = NO;
@@ -3316,13 +5054,10 @@ static BOOL findAndHideButtonWithAccessibilityId(UIView *viewToSearch, NSString 
     }
 }
 
-// This hook makes the control ALWAYS REPORT its variant as 32
-- (NSUInteger)variant {
-    if ([BHTManager restoreFollowButton]) {
-        return 32;
-    }
-    return %orig;
-}
+// NOTE: We intentionally do NOT override -variant. Forcing it to a constant 32
+// made every TUIFollowControl report "Follow" regardless of the real account
+// relationship, which hid the Follow button on every tweet (NeoFreeBird#2).
+// The setVariant: remap above already converts Subscribe (1) -> Follow (32).
 
 %end
 
@@ -3985,7 +5720,58 @@ static char kManualRefreshInProgressKey;
 
 %end
 
+// MARK: - Bypass attestation
+// Spoof DCAppAttestService.isSupported as NO so Twitter falls back to a non-attested path,
+// avoiding key exchange failures on jailbroken/sideloaded devices.
+%hook DCAppAttestService
+
+- (BOOL)isSupported {
+    if ([BHTManager isAttestationBypassEnabled]) {
+        return NO;
+    }
+    return %orig;
+}
+
+%end
+
+// Strip attestation headers from Twitter/X requests so the server doesn't reject
+// the key exchange when the client cannot produce a valid attestation token.
+%hook NSMutableURLRequest
+
+- (void)setValue:(NSString *)value forHTTPHeaderField:(NSString *)field {
+    if ([BHTManager isAttestationBypassEnabled]) {
+        NSString *host = self.URL.host;
+        if (host && ([host containsString:@"twitter.com"] || [host containsString:@"x.com"])) {
+            if ([field isEqualToString:@"X-Twitter-Client-Attest"] || [field isEqualToString:@"X-Client-UUID"]) {
+                return;
+            }
+        }
+    }
+    %orig;
+}
+
+%end
+
+// Force ephemeral sessions so web flows doesn't share cookies with
+// a persistent browser session that might expose attestation state.
+%hook ASWebAuthenticationSession
+
+- (instancetype)initWithURL:(NSURL *)URL callbackURLScheme:(NSString *)callbackURLScheme completionHandler:(void(^)(NSURL *, NSError *))completionHandler {
+    id result = %orig;
+    if (result && [BHTManager isAttestationBypassEnabled]) {
+        __weak ASWebAuthenticationSession *weakSession = result;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            weakSession.prefersEphemeralWebBrowserSession = YES;
+        });
+    }
+    return result;
+}
+
+%end
+
 %ctor {
+    BHTPinnedTabsLaunchUptime = [[NSProcessInfo processInfo] systemUptime];
+
     // Import AudioServices framework
     dlopen("/System/Library/Frameworks/AudioToolbox.framework/AudioToolbox", RTLD_LAZY);
 
@@ -4089,31 +5875,6 @@ static char kManualRefreshInProgressKey;
         playerToTimestampMap = [NSMapTable weakToStrongObjectsMapTable];
     });
 }
-
-// MARK: - DM Avatar Images
-%hook T1DirectMessageEntryViewModel
-- (BOOL)shouldShowAvatarImage {
-    if (![BHTManager dmAvatars]) {
-        return %orig;
-    }
-
-    if (self.isOutgoingMessage) {
-        return NO; // Don't show avatar for your own messages
-    }
-    // For incoming messages, only show avatar if it's the last message in a group from that sender
-    return [[self valueForKey:@"lastEntryInGroup"] boolValue];
-}
-
-- (BOOL)isAvatarImageEnabled {
-    if (![BHTManager dmAvatars]) {
-        return %orig;
-    }
-
-    // Always return YES so that space is allocated for the avatar,
-    // allowing shouldShowAvatarImage to control actual visibility.
-    return YES;
-}
-%end
 
 // MARK: - Classic Tab Bar Icon Theming
 %hook T1TabView
@@ -4475,6 +6236,37 @@ static UIView *findPlayerControlsInHierarchy(UIView *startView) {
 }
 %end
 
+// MARK: Remove the X-shaped reveal mask from the animated launch screen
+// The animated launch screen masks its container layer with an X-shaped hole
+// and grows it to reveal the app through an X-shaped portal. Detach that mask
+// so the logo zoom is kept but the splash simply fades out instead.
+
+%hook T1AnimatedLaunchScreenView
+
+- (void)layoutSubviews {
+    %orig;
+
+    for (UIView *sub in ((UIView *)self).subviews) {
+        sub.layer.mask = nil;
+    }
+}
+
+- (void)animateRevealWithCompletion:(id)completion {
+    for (UIView *sub in ((UIView *)self).subviews) {
+        sub.layer.mask = nil;
+    }
+
+    [UIView animateWithDuration:0.5 animations:^{
+        for (UIView *sub in ((UIView *)self).subviews) {
+            sub.backgroundColor = [UIColor clearColor];
+        }
+    }];
+
+    %orig;
+}
+
+%end
+
 // MARK: Source Label using T1ConversationFooterTextView
 
 %hook T1ConversationFooterTextView
@@ -4541,21 +6333,31 @@ static UIView *findPlayerControlsInHierarchy(UIView *startView) {
 static BOOL BHPillLabelOverrideEnabled(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 
-    // Fall back to the BrandingSettings default (@YES) if the key is missing
     if ([defaults objectForKey:@"refresh_pill_label"] == nil) {
-        return YES;
+        return [BHTManager isTwitterBranded];
     }
 
     return [defaults boolForKey:@"refresh_pill_label"];
+}
+
+// Only the "new posts/Tweets" refresh pill should be relabelled. TFNPillControl
+// is used for other pills too ("Back to top", counts, …); the old code forced
+// every pill's text to "Tweeted" and corrupted their reads. Gate on the pill's
+// own text mentioning posts/tweets.
+static BOOL BHPillTextIsNewContent(id text) {
+    if (![text isKindOfClass:[NSString class]]) return NO;
+    NSString *s = [(NSString *)text lowercaseString];
+    return [s containsString:@"post"] || [s containsString:@"tweet"];
 }
 
 // MARK: Change Pill text, controlled by "refresh_pill_label"
 %hook TFNPillControl
 
 - (id)text {
-    if (!BHPillLabelOverrideEnabled()) {
-        // Setting is off, keep original behavior
-        return %orig;
+    id origText = %orig;
+    if (!BHPillLabelOverrideEnabled() || !BHPillTextIsNewContent(origText)) {
+        // Setting off, or not the new-content pill: keep original behavior
+        return origText;
     }
 
     NSString *localizedText = [[BHTBundle sharedBundle] localizedStringForKey:@"REFRESH_PILL_TEXT"];
@@ -4564,8 +6366,8 @@ static BOOL BHPillLabelOverrideEnabled(void) {
 }
 
 - (void)setText:(id)arg1 {
-    if (!BHPillLabelOverrideEnabled()) {
-        // Setting is off, pass through original argument
+    if (!BHPillLabelOverrideEnabled() || !BHPillTextIsNewContent(arg1)) {
+        // Setting off, or not the new-content pill: pass through original argument
         return %orig(arg1);
     }
 

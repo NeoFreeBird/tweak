@@ -9,7 +9,6 @@
 /*Alerts and popups*/
 "RESTART_REQUIRED_ALERT_TITLE" = "再起動が必要です";
 "RESTART_REQUIRED_ALERT_MESSAGE" = "この変更を反映するには、Twitterを再起動する必要があります。";
-"MODERN_LAYOUT_RESTART_MESSAGE" = "古いレイアウトと新しいレイアウトを切り替えるには、Twitterを再起動する必要があります";
 
 "RESET_COMPLETE_TITLE" = "リセットしました";
 "BACKGROUND_RESET_MESSAGE" = "ダイレクトメッセージの背景がデフォルトにリセットされました。";
@@ -126,6 +125,8 @@
 
 "HIDE_MARKBOOK_BUTTON_OPTION_TITLE" = "ブックマークを非表示";
 "HIDE_MARKBOOK_BUTTON_OPTION_DETAIL_TITLE" = "ツイートからブックマークボタンを非表示にします。";
+"HIDE_DOWNVOTE_BUTTON_OPTION_TITLE" = "ダウンボートを非表示";
+"HIDE_DOWNVOTE_BUTTON_OPTION_DETAIL_TITLE" = "ツイートからダウンボートボタンを非表示にします。";
 
 "DISABLE_SENSITIVE_TWEET_WARNINGS_OPTION_TITLE" = "センシティブ警告を非表示";
 
