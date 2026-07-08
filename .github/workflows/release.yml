@@ -1,4 +1,4 @@
-name: Build NeoFreeBird
+name: Release
 
 on:
   workflow_dispatch:
@@ -12,28 +12,14 @@ on:
         description: "Target iOS Version"
         default: "14.0"
         required: true
+        type: string
       decrypted_ipa_url:
-        description: "Direct URL of the decrypted X ipa"
+        description: "Direct URL of the decrypted X ipa (required for sideloaded/trollstore)"
         default: ""
         required: true
         type: string
-      deploy_format:
-        description: "Deployment format"
-        default: sideloaded
-        required: true
-        type: choice
-        options:
-          - rootfull
-          - sideloaded
-          - trollstore
-          - rootless
-      twitter_branding:
-        description: "Set app name to Twitter (IPA builds only)"
-        default: true
-        required: false
-        type: boolean
       resource_pack_url:
-        description: "Override app icons (.ZIP) (IPA builds only)"
+        description: "Custom app icon pack (.ZIP) used for the branded IPA builds"
         default: "https://files.catbox.moe/dq8zon.zip"
         required: false
         type: string
@@ -42,14 +28,9 @@ on:
         default: ""
         required: false
         type: string
-      upload_artifact:
-        description: "Upload iPA as artifact (Public)"
-        default: true
-        required: false
-        type: boolean
       create_release:
-        description: "Create a draft release (Private)"
-        default: false
+        description: "Collect every build into a single draft release"
+        default: true
         required: false
         type: boolean
 
@@ -59,10 +40,34 @@ concurrency:
 
 jobs:
   build:
-    name: Build BHTwitter
+    name: Build ${{ matrix.deploy_format }}${{ matrix.branded && ' (Twitter)' || matrix.ipa && ' (X)' || '' }}
     runs-on: macos-latest
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Non-IPA formats: branding does not apply, so a single build each.
+          - deploy_format: rootfull
+            ipa: false
+            branded: false
+          - deploy_format: rootless
+            ipa: false
+            branded: false
+          # IPA formats: built both with and without custom branding.
+          - deploy_format: sideloaded
+            ipa: true
+            branded: false
+          - deploy_format: sideloaded
+            ipa: true
+            branded: true
+          - deploy_format: trollstore
+            ipa: true
+            branded: false
+          - deploy_format: trollstore
+            ipa: true
+            branded: true
 
     steps:
       - name: Checkout Main
@@ -88,7 +93,7 @@ jobs:
           submodules: recursive
 
       - name: Install cyan
-        if: inputs.deploy_format == 'sideloaded' || inputs.deploy_format == 'trollstore'
+        if: matrix.ipa
         run: pip install https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
 
       - name: iOS SDK Caching
@@ -120,7 +125,7 @@ jobs:
           echo "$BHTWITTER_VERSION"
 
       - name: Prepare X iPA
-        if: inputs.deploy_format == 'sideloaded' || inputs.deploy_format == 'trollstore'
+        if: matrix.ipa
         run: |
           wget "$IPA_URL" --no-verbose -O main/packages/com.atebits.Tweetie2.ipa
           unzip -q main/packages/com.atebits.Tweetie2.ipa -d main/tmp
@@ -133,7 +138,7 @@ jobs:
           IPA_URL: ${{ inputs.decrypted_ipa_url }}
 
       - name: Prepare Image Pack
-        if: inputs.resource_pack_url != '' && (inputs.deploy_format == 'sideloaded' || inputs.deploy_format == 'trollstore')
+        if: matrix.branded && inputs.resource_pack_url != ''
         run: |
           wget "$IMAGE_URL" --no-verbose -O main/resource-pack.zip
         env:
@@ -145,35 +150,26 @@ jobs:
           sed -i '' "s/^TARGET.*$/TARGET := iphone:clang:${{ inputs.sdk_version }}:${{ inputs.target_version }}/" Makefile
           IMAGE_FLAG=""
           if [ -f resource-pack.zip ]; then IMAGE_FLAG="--resource-pack resource-pack.zip"; fi
-          ./build.sh --${{ inputs.deploy_format }}${{ inputs.twitter_branding && ' --twitter-branding' || '' }} $IMAGE_FLAG
+          ./build.sh --${{ matrix.deploy_format }}${{ matrix.branded && ' --twitter-branding' || '' }} $IMAGE_FLAG
         env:
           THEOS: ${{ github.workspace }}/theos
 
       - name: Rename IPA to include IPA version
-        if: inputs.deploy_format == 'sideloaded' || inputs.deploy_format == 'trollstore'
+        if: matrix.ipa
         run: |
           mv "main/packages/$(ls -t main/packages | head -n1)" \
-             "main/packages/NeoFreeBird-${BRANDING}-${{ inputs.deploy_format }}_${{ env.BHTWITTER_VERSION }}_${{ env.X_VERSION }}.${IPA_EXT}"
+             "main/packages/NeoFreeBird-${{ matrix.deploy_format }}${BRAND_SUFFIX}_${{ env.BHTWITTER_VERSION }}_${{ env.X_VERSION }}.${IPA_EXT}"
         env:
-          IPA_EXT: ${{ inputs.deploy_format == 'trollstore' && 'tipa' || 'ipa' }}
-          BRANDING: ${{ inputs.twitter_branding && 'Twitter' || 'X' }}
+          IPA_EXT: ${{ matrix.deploy_format == 'trollstore' && 'tipa' || 'ipa' }}
+          BRAND_SUFFIX: ${{ matrix.branded && '-Twitter' || '-X' }}
 
       - name: Pass package name
         id: package_name
         run: |
           echo "package=$(ls -t main/packages | head -n1)" >> "$GITHUB_OUTPUT"
 
-      - name: Upload Artifact
-        if: ${{ inputs.upload_artifact }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: BHTwitter_${{ env.BHTWITTER_VERSION }}
-          path: ${{ github.workspace }}/main/packages/${{ steps.package_name.outputs.package }}
-          if-no-files-found: error
-
-      - name: Create Draft Release
+      - name: Add to Draft Release
         if: ${{ inputs.create_release }}
-        id: create_release
         uses: softprops/action-gh-release@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
