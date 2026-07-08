@@ -23,7 +23,7 @@ die() { err "$1"; exit 1; }
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [--sideloaded | --rootless | --trollstore | --rootfull] [-t | --twitter-branding] [--image-pack ZIP]
+Usage: $(basename "$0") [--sideloaded | --rootless | --trollstore | --rootfull] [-t | --twitter-branding] [--resource-pack ZIP]
 TL;DR: You need to select one flag to build NeoFreeBird.
 
 Flags (required):
@@ -33,14 +33,8 @@ Flags (required):
   --rootfull     Compile NeoFreeBird as a .deb file that requires a jailbreak.
 
 Options:
-  -t, --twitter-branding  Set's the app's display name to Twitter
-  --image-pack ZIP        (macOS only) Apply a theme pack ZIP (IPA builds only): icons/
-                          (PNG/JPG merged into the app's Assets.car; name a file
-                          after a rendition, or an asset e.g. AppIcon.png to
-                          auto-resize one master), svgs/ (vector glyphs copied
-                          over TwitterAppearance's VectorImages/main), and any
-                          root file (e.g. LaunchScreen.nib) overwrites the
-                          same-named file in the app root.
+  -t, --twitter-branding  Set's the app's display name to Twitter (IPA builds only)
+  --resource-pack ZIP     (macOS only) Apply a theme pack ZIP (IPA builds only)
   -h, --help              Show this help
 EOF
 }
@@ -57,7 +51,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 MODE=""
 TWITTER_BRANDING=0
-IMAGE_PACK=""
+RESOURCE_PACK=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -80,12 +74,12 @@ while [[ $# -gt 0 ]]; do
     -t|--twitter-branding)
       TWITTER_BRANDING=1; shift
       ;;
-    --image-pack)
-      [[ $# -ge 2 ]] || die "--image-pack requires a path argument."
-      IMAGE_PACK="$2"; shift 2
+    --resource-pack)
+      [[ $# -ge 2 ]] || die "--resource-pack requires a path argument."
+      RESOURCE_PACK="$2"; shift 2
       ;;
-    --image-pack=*)
-      IMAGE_PACK="${1#*=}"; shift
+    --resource-pack=*)
+      RESOURCE_PACK="${1#*=}"; shift
       ;;
     -h|--help)
       usage; exit 0
@@ -113,14 +107,14 @@ if [[ "$MODE" != "sideloaded" && "$MODE" != "trollstore" ]]; then
     say "Skipping --twitter-branding: branding only applies to IPA builds (--sideloaded/--trollstore)."
     TWITTER_BRANDING=0
   fi
-  if [[ -n "$IMAGE_PACK" ]]; then
-    say "Skipping --image-pack: branding only applies to IPA builds (--sideloaded/--trollstore)."
-    IMAGE_PACK=""
+  if [[ -n "$RESOURCE_PACK" ]]; then
+    say "Skipping --resource-pack: branding only applies to IPA builds (--sideloaded/--trollstore)."
+    RESOURCE_PACK=""
   fi
 fi
 
-if [[ -n "$IMAGE_PACK" && ! -f "$IMAGE_PACK" ]]; then
-  die "--image-pack file not found: $IMAGE_PACK"
+if [[ -n "$RESOURCE_PACK" && ! -f "$RESOURCE_PACK" ]]; then
+  die "--resource-pack file not found: $RESOURCE_PACK"
 fi
 
 clean_tree() {

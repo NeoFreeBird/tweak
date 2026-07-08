@@ -7,7 +7,7 @@
 #
 # Entry point:
 #   apply_ipa_branding <ipa_path>   Unpacks the IPA once and applies every
-#                                   enabled step — the theme pack in IMAGE_PACK
+#                                   enabled step — the theme pack in RESOURCE_PACK
 #                                   and, when TWITTER_BRANDING=1, the "Twitter"
 #                                   display name — then repackages once.
 #
@@ -51,13 +51,13 @@ _set_display_name_in_app() {
 #   <root>  non-image files at the zip root (e.g. LaunchScreen.nib) overwrite the
 #           same-named file in the app root.
 # A flat zip (images at the root, no icons/ folder) is still treated as icons.
-_apply_image_pack_to_app() {
+_apply_resource_pack_to_app() {
   local appdir="$1"
   local workdir="$2"
   local zip="$3"
   [[ -f "$zip" ]] || { err "Branding: image pack not found: $zip"; return 1; }
-  command -v python3 >/dev/null 2>&1 || { err "Branding: 'python3' is required for --image-pack"; return 1; }
-  command -v unzip   >/dev/null 2>&1 || { err "Branding: 'unzip' is required for --image-pack"; return 1; }
+  command -v python3 >/dev/null 2>&1 || { err "Branding: 'python3' is required for --resource-pack"; return 1; }
+  command -v unzip   >/dev/null 2>&1 || { err "Branding: 'unzip' is required for --resource-pack"; return 1; }
 
   # Resolve the pack to an absolute path before we cd around while zipping.
   zip="$(cd "$(dirname "$zip")" && pwd)/$(basename "$zip")"
@@ -167,7 +167,7 @@ _apply_image_pack_to_app() {
 # and re-zipped a single time regardless of how many steps run.
 apply_ipa_branding() {
   local ipa="$1"
-  [[ -n "${IMAGE_PACK:-}" || "${TWITTER_BRANDING:-0}" == "1" ]] || return 0
+  [[ -n "${RESOURCE_PACK:-}" || "${TWITTER_BRANDING:-0}" == "1" ]] || return 0
   [[ -f "$ipa" ]] || die "Branding: IPA not found: $ipa"
   command -v unzip >/dev/null 2>&1 || die "Branding: 'unzip' is required"
 
@@ -181,8 +181,8 @@ apply_ipa_branding() {
     rm -rf "$workdir"; die "Branding: could not locate .app inside $ipa"
   fi
 
-  if [[ -n "${IMAGE_PACK:-}" ]]; then
-    _apply_image_pack_to_app "$appdir" "$workdir" "$IMAGE_PACK" \
+  if [[ -n "${RESOURCE_PACK:-}" ]]; then
+    _apply_resource_pack_to_app "$appdir" "$workdir" "$RESOURCE_PACK" \
       || { rm -rf "$workdir"; die "Failed to apply image pack."; }
   fi
   if [[ "${TWITTER_BRANDING:-0}" == "1" ]]; then

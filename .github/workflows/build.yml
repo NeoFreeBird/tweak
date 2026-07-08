@@ -32,7 +32,7 @@ on:
         default: true
         required: false
         type: boolean
-      image_pack_url:
+      resource_pack_url:
         description: "Override app icons (.ZIP) (IPA builds only)"
         default: "https://files.catbox.moe/dq8zon.zip"
         required: false
@@ -133,18 +133,18 @@ jobs:
           IPA_URL: ${{ inputs.decrypted_ipa_url }}
 
       - name: Prepare Image Pack
-        if: inputs.image_pack_url != '' && (inputs.deploy_format == 'sideloaded' || inputs.deploy_format == 'trollstore')
+        if: inputs.resource_pack_url != '' && (inputs.deploy_format == 'sideloaded' || inputs.deploy_format == 'trollstore')
         run: |
-          wget "$IMAGE_URL" --no-verbose -O main/image-pack.zip
+          wget "$IMAGE_URL" --no-verbose -O main/resource-pack.zip
         env:
-          IMAGE_URL: ${{ inputs.image_pack_url }}
+          IMAGE_URL: ${{ inputs.resource_pack_url }}
 
       - name: Build Package
         run: |
           cd ${{ github.workspace }}/main
           sed -i '' "s/^TARGET.*$/TARGET := iphone:clang:${{ inputs.sdk_version }}:${{ inputs.target_version }}/" Makefile
           IMAGE_FLAG=""
-          if [ -f image-pack.zip ]; then IMAGE_FLAG="--image-pack image-pack.zip"; fi
+          if [ -f resource-pack.zip ]; then IMAGE_FLAG="--resource-pack resource-pack.zip"; fi
           ./build.sh --${{ inputs.deploy_format }}${{ inputs.twitter_branding && ' --twitter-branding' || '' }} $IMAGE_FLAG
         env:
           THEOS: ${{ github.workspace }}/theos
