@@ -47,7 +47,12 @@ require_cmd make
 CYAN_BIN=""; if command -v cyan >/dev/null 2>&1; then CYAN_BIN="cyan"; fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-. "$SCRIPT_DIR/branding/ipa-branding.sh"
+
+apply_ipa_branding() {
+  require_cmd python3
+  TWITTER_BRANDING="$TWITTER_BRANDING" RESOURCE_PACK="$RESOURCE_PACK" \
+    python3 "$SCRIPT_DIR/branding/ipa_branding.py" "$1"
+}
 
 MODE=""
 TWITTER_BRANDING=0

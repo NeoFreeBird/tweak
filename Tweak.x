@@ -505,7 +505,6 @@ static void BHT_maybeHandleHarvestWebView(__unsafe_unretained id webViewControll
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"hide_who_to_follow"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"no_tab_bar_hiding"];
         [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"attestation_bypass_enabled"];
-        [[NSUserDefaults standardUserDefaults] setBool:true forKey:@"restore_twitter_names"];
     }
     [BHTManager cleanCache];
     if ([BHTManager FLEX]) {
@@ -4598,28 +4597,73 @@ objc_setAssociatedObject(footerView,
 %end
 
 // MARK: Restore Twitter terminology, controlled by "restore_twitter_names"
-// Twitter resolves its UI strings entirely in Swift (the XLocalized module), so they
-// never pass through NSBundle/CFBundle where they could be intercepted. Instead we
-// rewrite the classic wording ("X" -> "Twitter", "Post" -> "Tweet", "Repost" ->
-// "Retweet"…) as text is set on UIKit chrome (labels and buttons). The tweet-body
-// renderer (TFNAttributedTextView) is deliberately left untouched so people's actual
-// posts aren't rewritten. Word matches only; leading capitalisation (and all-caps) is
-// preserved.
+// Two layers, both driven by locale files in the tweak bundle:
+//   1. RenameOverrides.strings — Twitter localization key -> exact replacement,
+//      a missing key falls through to the generic replacement
+//   2. RenameWords.strings — generic word replacements ("X" -> "Twitter",
+//      "Post" -> "Tweet", etc.) applied to localized and server-side strings
+// Both are strictly per-language: a language without its own copy of a file gets no
+// renaming from that layer, rather than English rules applied to non-English text.
 
-// Maps a lowercase inflection of "post"/"repost" to its Twitter equivalent.
+static NSDictionary<NSString *, NSString *> *BHTRenameTable(NSString *name) {
+    NSBundle *bundle = [BHTBundle sharedBundle].mainBundle;
+    NSString *appLanguage = [[NSBundle mainBundle] preferredLocalizations].firstObject ?: @"en";
+    NSString *localization = [NSBundle preferredLocalizationsFromArray:bundle.localizations
+                                                        forPreferences:@[appLanguage]].firstObject;
+
+    // preferredLocalizationsFromArray: if there's no match, it silently
+    // returns the development region (en) instead, and rejects that so unsupported
+    // languages skip renaming rather than getting English rules
+    NSString *appCode = [appLanguage componentsSeparatedByString:@"-"].firstObject;
+    NSString *lprojCode = [[localization stringByReplacingOccurrencesOfString:@"_" withString:@"-"]
+                              componentsSeparatedByString:@"-"].firstObject;
+    if (![appCode isEqualToString:lprojCode]) {
+        return @{};
+    }
+
+    NSString *path = [bundle pathForResource:name ofType:@"strings" inDirectory:nil forLocalization:localization];
+    NSString *contents = path ? [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil] : nil;
+    NSDictionary *table = [contents propertyListFromStringsFileFormat];
+    return [table isKindOfClass:[NSDictionary class]] ? table : @{};
+}
+
+static NSDictionary<NSString *, NSString *> *BHTRenameKeyOverrides(void) {
+    static NSDictionary *overrides = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{ overrides = BHTRenameTable(@"RenameOverrides"); });
+    return overrides;
+}
+
 static NSDictionary<NSString *, NSString *> *BHTwitterWordMap(void) {
     static NSDictionary *map = nil;
     static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        map = @{
-            @"repost": @"retweet", @"reposts": @"retweets",
-            @"reposted": @"retweeted", @"reposting": @"retweeting",
-            @"post": @"tweet", @"posts": @"tweets",
-            @"posted": @"tweeted", @"posting": @"tweeting",
-						@"premium": @"blue"
-        };
-    });
+    dispatch_once(&onceToken, ^{ map = BHTRenameTable(@"RenameWords"); });
     return map;
+}
+
+// Builds \b(word|word…)\b from the map keys of one sensitivity class, longest word
+// first so inflections win over their stems ("reposts" before "repost").
+static NSRegularExpression *BHTRenameRegex(BOOL caseSensitive) {
+    NSMutableArray<NSString *> *words = [NSMutableArray array];
+    for (NSString *word in BHTwitterWordMap()) {
+        BOOL hasUpper = [word rangeOfCharacterFromSet:[NSCharacterSet uppercaseLetterCharacterSet]].location != NSNotFound;
+        if (hasUpper == caseSensitive) {
+            [words addObject:[NSRegularExpression escapedPatternForString:word]];
+        }
+    }
+    if (words.count == 0) {
+        return nil;
+    }
+
+    [words sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+        if (a.length > b.length) return NSOrderedAscending;
+        if (a.length < b.length) return NSOrderedDescending;
+        return [a compare:b];
+    }];
+    NSString *pattern = [NSString stringWithFormat:@"\\b(%@)\\b", [words componentsJoinedByString:@"|"]];
+    return [NSRegularExpression regularExpressionWithPattern:pattern
+                                                     options:(caseSensitive ? 0 : NSRegularExpressionCaseInsensitive)
+                                                       error:nil];
 }
 
 // Applies the capitalisation style of `token` (all-caps or leading-capital) to `base`.
@@ -4649,42 +4693,31 @@ static NSArray<NSDictionary *> *BHRenameEdits(NSString *input) {
         return nil;
     }
 
-    // Cheap prefilter: only run the regexes when a candidate substring is present.
-    BOOL maybePost = [input rangeOfString:@"ost" options:NSCaseInsensitiveSearch].location != NSNotFound;
-    BOOL maybeX = [input rangeOfString:@"X"].location != NSNotFound;
-    if (!maybePost && !maybeX) {
-        return nil;
-    }
-
-    static NSRegularExpression *postRegex = nil;
-    static NSRegularExpression *xRegex = nil;
+    static NSRegularExpression *insensitiveRegex = nil;
+    static NSRegularExpression *sensitiveRegex = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        postRegex = [NSRegularExpression regularExpressionWithPattern:@"\\b(reposts|reposted|reposting|repost|posts|posted|posting|post)\\b"
-                                                              options:NSRegularExpressionCaseInsensitive
-                                                                error:nil];
-        // Case-sensitive: only a standalone uppercase "X" becomes "Twitter".
-        xRegex = [NSRegularExpression regularExpressionWithPattern:@"\\bX\\b" options:0 error:nil];
+        insensitiveRegex = BHTRenameRegex(NO);
+        sensitiveRegex = BHTRenameRegex(YES);
     });
 
+    NSDictionary *wordMap = BHTwitterWordMap();
     NSRange full = NSMakeRange(0, input.length);
     NSMutableArray<NSDictionary *> *edits = [NSMutableArray array];
 
-    if (maybeX) {
-        for (NSTextCheckingResult *match in [xRegex matchesInString:input options:0 range:full]) {
-            [edits addObject:@{@"range": [NSValue valueWithRange:match.range], @"repl": @"Twitter"}];
+    for (NSTextCheckingResult *match in [sensitiveRegex matchesInString:input options:0 range:full]) {
+        NSString *repl = wordMap[[input substringWithRange:match.range]];
+        if (repl) {
+            [edits addObject:@{@"range": [NSValue valueWithRange:match.range], @"repl": repl}];
         }
     }
 
-    if (maybePost) {
-        NSDictionary *wordMap = BHTwitterWordMap();
-        for (NSTextCheckingResult *match in [postRegex matchesInString:input options:0 range:full]) {
-            NSString *token = [input substringWithRange:match.range];
-            NSString *base = wordMap[token.lowercaseString];
-            if (base) {
-                [edits addObject:@{@"range": [NSValue valueWithRange:match.range],
-                                   @"repl": BHMatchCapitalisation(token, base)}];
-            }
+    for (NSTextCheckingResult *match in [insensitiveRegex matchesInString:input options:0 range:full]) {
+        NSString *token = [input substringWithRange:match.range];
+        NSString *base = wordMap[token.lowercaseString];
+        if (base) {
+            [edits addObject:@{@"range": [NSValue valueWithRange:match.range],
+                               @"repl": BHMatchCapitalisation(token, base)}];
         }
     }
 
@@ -4743,24 +4776,18 @@ static NSAttributedString *BHRestoreTwitterAttributed(NSAttributedString *input)
     return result;
 }
 
-%hook UILabel
-- (void)setAttributedText:(NSAttributedString *)attributedText {
-    if (attributedText.length > 0 && [BHTManager restoreTwitterNames] &&
-        ![self isKindOfClass:%c(TFNAttributedTextView)] && ![BHTManager viewSkipsRename:self]) {
-        %orig(BHRestoreTwitterAttributed(attributedText));
-        return;
+%hook NSBundle
+- (NSString *)localizedStringForKey:(NSString *)key value:(NSString *)value table:(NSString *)tableName {
+    NSString *result = %orig;
+    if (![BHTManager restoreTwitterNames] || self == [BHTBundle sharedBundle].mainBundle) {
+        return result;
     }
-    %orig;
-}
-%end
 
-%hook UIButton
-- (void)setTitle:(NSString *)title forState:(UIControlState)state {
-    if (title.length > 0 && [BHTManager restoreTwitterNames] && ![BHTManager viewSkipsRename:self]) {
-        %orig(BHRestoreTwitterTerminology(title), state);
-        return;
+    NSString *override = key ? BHTRenameKeyOverrides()[key] : nil;
+    if (override) {
+        return override;
     }
-    %orig;
+    return result.length > 0 ? BHRestoreTwitterTerminology(result) : result;
 }
 %end
 
@@ -4850,9 +4877,8 @@ static NSAttributedString *BHRestoreTwitterAttributed(NSAttributedString *input)
 static BOOL BHColorTwitterIconEnabled(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 
-    // Fall back to the BrandingSettings default (@YES) if the key is missing
     if ([defaults objectForKey:@"color_twitter_icon_in_top_bar"] == nil) {
-        return YES;
+        return [BHTManager isTwitterBranded];
     }
 
     return [defaults boolForKey:@"color_twitter_icon_in_top_bar"];
@@ -6091,12 +6117,6 @@ static UIView *findPlayerControlsInHierarchy(UIView *startView) {
 %hook UILabel
 
 - (void)setText:(NSString *)text {
-    // Restore classic Twitter terminology on interface labels (not tweet bodies).
-    if (text.length > 0 && [BHTManager restoreTwitterNames] &&
-        ![self isKindOfClass:%c(TFNAttributedTextView)] && ![BHTManager viewSkipsRename:self]) {
-        text = BHRestoreTwitterTerminology(text);
-    }
-
     %orig(text);
 
     // Skip processing if feature is disabled
@@ -6313,9 +6333,8 @@ static UIView *findPlayerControlsInHierarchy(UIView *startView) {
 static BOOL BHPillLabelOverrideEnabled(void) {
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 
-    // Fall back to the BrandingSettings default (@YES) if the key is missing
     if ([defaults objectForKey:@"refresh_pill_label"] == nil) {
-        return YES;
+        return [BHTManager isTwitterBranded];
     }
 
     return [defaults boolForKey:@"refresh_pill_label"];

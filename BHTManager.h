@@ -70,8 +70,7 @@
 
 + (BOOL)hideGrokAnalyze;
 + (BOOL)restoreTwitterNames;
-+ (void)markViewSkipRename:(UIView *)view;
-+ (BOOL)viewSkipsRename:(UIView *)view;
++ (BOOL)isTwitterBranded;
 + (BOOL)hideFollowButton;
 + (BOOL)restoreFollowButton;
 + (BOOL)squareAvatars;

@@ -309,16 +309,20 @@
 }
 
 + (BOOL)restoreTwitterNames {
-    return [[NSUserDefaults standardUserDefaults] boolForKey:@"restore_twitter_names"];
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    if ([defaults objectForKey:@"restore_twitter_names"] == nil) {
+        return [BHTManager isTwitterBranded];
+    }
+    return [defaults boolForKey:@"restore_twitter_names"];
 }
 
-// Marks a view (our own settings labels) so the terminology rewriter leaves it alone.
-static const void *BHTSkipRenameKey = &BHTSkipRenameKey;
-+ (void)markViewSkipRename:(UIView *)view {
-    objc_setAssociatedObject(view, BHTSkipRenameKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-+ (BOOL)viewSkipsRename:(UIView *)view {
-    return [objc_getAssociatedObject(view, BHTSkipRenameKey) boolValue];
++ (BOOL)isTwitterBranded {
+    static BOOL branded = NO;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        branded = [[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleDisplayName"] isEqual:@"Twitter"];
+    });
+    return branded;
 }
 
 + (BOOL)hideFollowButton {
