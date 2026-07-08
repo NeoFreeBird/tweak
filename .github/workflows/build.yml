@@ -34,7 +34,7 @@ on:
         type: boolean
       image_pack_url:
         description: "Override app icons (.ZIP) (IPA builds only)"
-        default: "https://files.catbox.moe/umegw5.zip"
+        default: "https://files.catbox.moe/dq8zon.zip"
         required: false
         type: string
       commit_id:
