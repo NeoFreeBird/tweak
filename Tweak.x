@@ -6216,6 +6216,37 @@ static UIView *findPlayerControlsInHierarchy(UIView *startView) {
 }
 %end
 
+// MARK: Remove the X-shaped reveal mask from the animated launch screen
+// The animated launch screen masks its container layer with an X-shaped hole
+// and grows it to reveal the app through an X-shaped portal. Detach that mask
+// so the logo zoom is kept but the splash simply fades out instead.
+
+%hook T1AnimatedLaunchScreenView
+
+- (void)layoutSubviews {
+    %orig;
+
+    for (UIView *sub in ((UIView *)self).subviews) {
+        sub.layer.mask = nil;
+    }
+}
+
+- (void)animateRevealWithCompletion:(id)completion {
+    for (UIView *sub in ((UIView *)self).subviews) {
+        sub.layer.mask = nil;
+    }
+
+    [UIView animateWithDuration:0.5 animations:^{
+        for (UIView *sub in ((UIView *)self).subviews) {
+            sub.backgroundColor = [UIColor clearColor];
+        }
+    }];
+
+    %orig;
+}
+
+%end
+
 // MARK: Source Label using T1ConversationFooterTextView
 
 %hook T1ConversationFooterTextView
