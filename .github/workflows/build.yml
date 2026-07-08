@@ -153,9 +153,10 @@ jobs:
         if: inputs.deploy_format == 'sideloaded' || inputs.deploy_format == 'trollstore'
         run: |
           mv "main/packages/$(ls -t main/packages | head -n1)" \
-             "main/packages/NeoFreeBird-${{ inputs.deploy_format }}_${{ env.BHTWITTER_VERSION }}_${{ env.X_VERSION }}.${IPA_EXT}"
+             "main/packages/NeoFreeBird-${BRANDING}-${{ inputs.deploy_format }}_${{ env.BHTWITTER_VERSION }}_${{ env.X_VERSION }}.${IPA_EXT}"
         env:
           IPA_EXT: ${{ inputs.deploy_format == 'trollstore' && 'tipa' || 'ipa' }}
+          BRANDING: ${{ inputs.twitter_branding && 'Twitter' || 'X' }}
 
       - name: Pass package name
         id: package_name
