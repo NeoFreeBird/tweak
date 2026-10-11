@@ -23,8 +23,6 @@
 #import "TWHeaders.h"
 #import "SAMKeychain/SAMKeychain.h"
 #import "CustomTabBar/BHCustomTabBarUtility.h"
-#import <Preferences/PSListController.h>
-#import <Preferences/PSSpecifier.h>
 #import "ModernSettingsViewController.h"
 
 @class T1SettingsViewController;
@@ -2146,12 +2144,6 @@ static void BHTApplyCopyButtonStyle(UIButton *copyButton, T1ProfileHeaderView *h
         batchSwizzlingOnClass([self class], [fontsMethods copy], (IMP)TAEStandardFontGroupReplacement);
     });
     return %orig;
-}
-%end
-
-%hook HBForceCepheiPrefs
-+ (BOOL)forceCepheiPrefsWhichIReallyNeedToAccessAndIKnowWhatImDoingISwear {
-    return YES;
 }
 %end
 
