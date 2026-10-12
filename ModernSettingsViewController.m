@@ -1680,6 +1680,13 @@ static UIFont *TwitterChirpFont(TwitterFontStyle style) {
     return UITableViewAutomaticDimension;
 }
 
+- (void)switchChanged:(UISwitch *)sender {
+    NSString *key = objc_getAssociatedObject(sender, @"prefKey");
+    if (key) {
+        [[NSUserDefaults standardUserDefaults] setBool:sender.isOn forKey:key];
+    }
+}
+
 @end
 
 // ==============================
